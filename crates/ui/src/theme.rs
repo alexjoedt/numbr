@@ -2,7 +2,7 @@ use iced::Color;
 
 // Numi-like palette: one flat dark surface with bright results and minimal chrome.
 
-pub const BG: Color = Color::from_rgb(0.125, 0.133, 0.145); // #202225
+pub const BG: Color = Color::from_rgb(0.125, 0.133, 0.145); // #202225 (compile-time fallback)
 pub const EDITOR_BG: Color = BG;
 pub const GUTTER_BG: Color = BG;
 pub const BOTTOM_BAR_BG: Color = BG;

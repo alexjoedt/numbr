@@ -257,6 +257,10 @@ pub fn app_view(app: &App) -> Element<'_, Message> {
 pub fn run() -> iced::Result {
     iced::application("numbr", app_update, app_view)
         .theme(|_| Theme::Dark)
+        .style(|app: &App, _theme| iced::application::Appearance {
+            background_color: app.model.settings.background.to_iced_color(),
+            text_color: iced::Color::WHITE,
+        })
         .window(iced::window::Settings {
             size: iced::Size::new(640.0, 460.0),
             position: iced::window::Position::Centered,

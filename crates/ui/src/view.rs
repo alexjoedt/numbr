@@ -174,15 +174,7 @@ pub fn view(model: &Model) -> Element<'_, Message> {
     )
     .width(Length::Fill)
     .height(Length::Fixed(BOTTOM_BAR_H))
-    .style(|_| iced::widget::container::Style {
-        background: Some(Background::Color(theme::BOTTOM_BAR_BG)),
-        border: Border {
-            color: Color::TRANSPARENT,
-            width: 0.0,
-            radius: 0.0.into(),
-        },
-        ..Default::default()
-    });
+    .style(|_| iced::widget::container::Style::default());
 
     // --- Settings panel (shown when open) ---
     let mut root = column![main_content];
@@ -194,15 +186,7 @@ pub fn view(model: &Model) -> Element<'_, Message> {
     root = root.push(bottom_bar);
 
     container(root)
-        .style(|_| iced::widget::container::Style {
-            background: Some(Background::Color(theme::EDITOR_BG)),
-            border: Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 0.0.into(),
-            },
-            ..Default::default()
-        })
+        .style(|_| iced::widget::container::Style::default())
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -430,11 +414,12 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
             right: 14.0,
         });
 
+    let bg_color = model.settings.background.to_iced_color();
     container(panel_content)
         .width(Length::Fill)
         .height(Length::Fixed(SETTINGS_PANEL_H))
-        .style(|_| iced::widget::container::Style {
-            background: Some(Background::Color(theme::EDITOR_BG)),
+        .style(move |_| iced::widget::container::Style {
+            background: Some(Background::Color(bg_color)),
             border: Border {
                 color: Color::TRANSPARENT,
                 width: 0.0,

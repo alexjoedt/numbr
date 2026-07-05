@@ -110,10 +110,63 @@ impl FontWeight {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackgroundConfig {
+    /// Background base color as a hex string, e.g. `"#202225"` or `"#fff"`.
+    #[serde(default = "BackgroundConfig::default_color")]
+    pub color: String,
+    /// Opacity in the range `[0.0, 1.0]`. `1.0` is fully opaque.
+    #[serde(default = "BackgroundConfig::default_transparency")]
+    pub transparency: f32,
+}
+
+impl BackgroundConfig {
+    fn default_color() -> String {
+        String::from("#202225")
+    }
+
+    fn default_transparency() -> f32 {
+        1.0
+    }
+
+    /// Parse the hex color and apply the configured transparency as an `iced::Color`.
+    pub fn to_iced_color(&self) -> iced::Color {
+        let hex = self.color.trim_start_matches('#');
+        let (r, g, b) = match hex.len() {
+            3 => {
+                let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(0x20);
+                let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(0x22);
+                let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(0x25);
+                (r, g, b)
+            }
+            6 => {
+                let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0x20);
+                let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0x22);
+                let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0x25);
+                (r, g, b)
+            }
+            _ => (0x20, 0x22, 0x25),
+        };
+        let alpha = self.transparency.clamp(0.0, 1.0);
+        iced::Color::from_rgba8(r, g, b, alpha)
+    }
+}
+
+impl Default for BackgroundConfig {
+    fn default() -> Self {
+        BackgroundConfig {
+            color: BackgroundConfig::default_color(),
+            transparency: BackgroundConfig::default_transparency(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub font_size: f32,
     pub font_family: FontFamily,
     pub font_weight: FontWeight,
+    #[serde(default)]
+    pub background: BackgroundConfig,
 }
 
 impl Default for Settings {
@@ -122,6 +175,7 @@ impl Default for Settings {
             font_size: 15.0,
             font_family: FontFamily::SystemMonospace,
             font_weight: FontWeight::Normal,
+            background: BackgroundConfig::default(),
         }
     }
 }
@@ -183,3 +237,5 @@ impl Default for Model {
         }
     }
 }
+
+
