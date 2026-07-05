@@ -102,6 +102,7 @@ fn contiguous_result_numbers(lines: &[Value]) -> Vec<Decimal> {
     let mut numbers: Vec<Decimal> = lines
         .iter()
         .rev()
+        .skip_while(|value| matches!(value, Value::Str(text) if text.is_empty()))
         .take_while(|value| !matches!(value, Value::Str(text) if text.is_empty()))
         .filter_map(Value::to_decimal)
         .collect();
