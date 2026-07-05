@@ -1,0 +1,3 @@
+scheme: semver
+prefix: v
+default_branch: main
