@@ -36,16 +36,19 @@ The binary is placed at `target/release/numbr`.
 
 ## Hyprland integration
 
-Add to your `hyprland.conf`:
+Add to your `hyprland.lua` (or any file you `require` from it):
 
-```conf
-# Launch numbr with Super+Shift+C
-bind = SUPER_SHIFT, C, exec, numbr
+```lua
+-- Launch numbr with Super+Shift+C
+hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("numbr"), { description = "Calculator" })
 
-# Float it, centre it, give it a fixed size
-windowrulev2 = float,        class:^(numbr)$
-windowrulev2 = size 680 520, class:^(numbr)$
-windowrulev2 = center,       class:^(numbr)$
+-- Float it, centre it, give it a fixed size
+hl.window_rule({
+    match  = { class = "^(numbr)$" },
+    float  = true,
+    size   = { 680, 520 },
+    center = true,
+})
 ```
 
 Close the window when you are done — your session is saved automatically and
