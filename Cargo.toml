@@ -1,6 +1,22 @@
-[package]
-name = "numbr"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "crates/core",
+    "crates/ui",
+    "crates/app",
+    "crates/providers",
+]
+resolver = "2"
 
-[dependencies]
+[workspace.dependencies]
+thiserror    = "2"
+rust_decimal = { version = "1", features = ["maths"] }
+logos        = "0.14"
+insta        = { version = "1", features = ["ron"] }
+chrono       = { version = "0.4", default-features = false, features = ["std", "clock"] }
+serde        = { version = "1", features = ["derive"] }
+iced         = { version = "0.13", features = ["advanced", "multi-window"] }
+tracing             = "0.1"
+tracing-subscriber  = { version = "0.3", features = ["env-filter"] }
+
+[workspace.lints.clippy]
+all = "warn"

@@ -1,0 +1,16 @@
+[package]
+name    = "numbr-core"
+version = "0.1.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror    = { workspace = true }
+rust_decimal = { workspace = true }
+logos        = { workspace = true }
+chrono       = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
