@@ -44,7 +44,8 @@ impl Engine {
     }
 
     /// Evaluate a single line. Returns the result value or an error.
-    /// **Never panics.** Errors propagate as `Err(EvalError)`.
+    /// Malformed and out-of-range input yields `Err(EvalError)`; untrusted
+    /// input does not panic.
     pub fn evaluate(&mut self, input: &str) -> Result<Value, EvalError> {
         let trimmed = strip_comment(input).trim();
         if trimmed.is_empty() {

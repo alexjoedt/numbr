@@ -500,6 +500,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_date_add_overflow_is_error() {
+        let result = Engine::new().evaluate("today + 99999999 years");
+        assert!(matches!(result, Err(EvalError::TypeError(_))));
+    }
+
+    #[test]
+    fn test_date_sub_overflow_is_error() {
+        let result = Engine::new().evaluate("2026-01-01 - 999999999 days");
+        assert!(matches!(result, Err(EvalError::TypeError(_))));
+    }
+
+    #[test]
+    fn test_datetime_add_overflow_is_error() {
+        let result = Engine::new().evaluate("now + 99999999 years");
+        assert!(matches!(result, Err(EvalError::TypeError(_))));
+    }
+
+    #[test]
+    fn test_date_add_beyond_timedelta_range_is_error() {
+        // Large enough that the TimeDelta itself is out of range, not just the date.
+        let result = Engine::new().evaluate("today + 99999999999999 years");
+        assert!(matches!(result, Err(EvalError::TypeError(_))));
+    }
+
     // ── M4: Modbus conversions ────────────────────────────────────────────
 
     #[test]

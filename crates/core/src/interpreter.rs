@@ -396,7 +396,9 @@ fn add_date_duration(
     if let Some(days_per_unit) = units::time_unit_to_days(unit) {
         let amount = decimal_to_f64(amount, "duration amount")?;
         let total_days = rounded_f64_to_i64(amount * days_per_unit as f64, "duration days")?;
-        let new_date = d + Duration::days(total_days);
+        let new_date = Duration::try_days(total_days)
+            .and_then(|delta| d.checked_add_signed(delta))
+            .ok_or_else(|| EvalError::TypeError("date out of range".into()))?;
         Ok(Value::Date(new_date))
     } else if units::is_duration_unit(unit) {
         // Sub-day precision: round to nearest day
@@ -404,7 +406,9 @@ fn add_date_duration(
             .ok_or_else(|| EvalError::TypeError(format!("cannot add unit '{unit}' to a date")))?;
         let amount = decimal_to_f64(amount, "duration amount")?;
         let total_days = rounded_f64_to_i64(amount * secs_per_unit / 86_400.0, "duration days")?;
-        let new_date = d + Duration::days(total_days);
+        let new_date = Duration::try_days(total_days)
+            .and_then(|delta| d.checked_add_signed(delta))
+            .ok_or_else(|| EvalError::TypeError("date out of range".into()))?;
         Ok(Value::Date(new_date))
     } else {
         Err(EvalError::TypeError(format!(
@@ -422,7 +426,9 @@ fn add_datetime_duration(
     if let Some(ms_per_unit) = units::time_unit_to_milliseconds(unit) {
         let amount = decimal_to_f64(amount, "duration amount")?;
         let total_ms = rounded_f64_to_i64(amount * ms_per_unit as f64, "duration milliseconds")?;
-        let new_dt = dt + Duration::milliseconds(total_ms);
+        let new_dt = Duration::try_milliseconds(total_ms)
+            .and_then(|delta| dt.checked_add_signed(delta))
+            .ok_or_else(|| EvalError::TypeError("datetime out of range".into()))?;
         Ok(Value::DateTime(new_dt))
     } else {
         Err(EvalError::TypeError(format!(
