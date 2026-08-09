@@ -19,7 +19,7 @@ workspace = true
 numbr-core = { path = "../core" }
 iced       = { workspace = true }
 serde      = { workspace = true }
-toml       = "0.8"
+toml       = "1.1"
 async-io   = "2"
 blocking   = "1"
 tracing    = { workspace = true }
