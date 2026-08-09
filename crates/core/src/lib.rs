@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod builtin;
 pub mod engine;
 pub mod error;

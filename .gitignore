@@ -1,1 +1,6 @@
 /target
+*.profraw
+.env
+.DS_Store
+.idea/
+*.swp

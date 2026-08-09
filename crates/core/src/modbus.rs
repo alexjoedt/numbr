@@ -1,11 +1,11 @@
 //! Modbus register conversion functions.
 //!
 //! Implements calculation-only Modbus conversions (no live communication):
-//! - [`modbus::float32`] / [`modbus::float32le`] — IEEE-754 float from two 16-bit registers
-//! - [`modbus::int32`]  — signed 32-bit integer from two registers
-//! - [`modbus::uint32`] — unsigned 32-bit integer from two registers
-//! - [`modbus::swap::word`] — byte-swap a single 16-bit register
-//! - [`modbus::swap::byte`] — combine two bytes in reversed order
+//! - `modbus::float32` / `modbus::float32le` — IEEE-754 float from two 16-bit registers
+//! - `modbus::int32`  — signed 32-bit integer from two registers
+//! - `modbus::uint32` — unsigned 32-bit integer from two registers
+//! - `modbus::swap::word` — byte-swap a single 16-bit register
+//! - `modbus::swap::byte` — combine two bytes in reversed order
 //!
 //! ## Register-order formats
 //!
