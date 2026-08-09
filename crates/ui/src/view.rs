@@ -20,13 +20,18 @@ fn format_result_value(value: &Value) -> String {
     match value {
         Value::Decimal(d) => group_thousands(&d.to_string()),
         Value::Float(_) | Value::Integer(_) => group_thousands(&value.to_string()),
-        Value::Unit { amount, unit } => format!("{} {unit}", group_thousands(&amount.normalize().to_string())),
+        Value::Unit { amount, unit } => format!(
+            "{} {unit}",
+            group_thousands(&amount.normalize().to_string())
+        ),
         _ => value.to_string(),
     }
 }
 
 fn group_thousands(value: &str) -> String {
-    let (sign, unsigned) = value.strip_prefix('-').map_or(("", value), |rest| ("-", rest));
+    let (sign, unsigned) = value
+        .strip_prefix('-')
+        .map_or(("", value), |rest| ("-", rest));
     let (integer, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
 
     let mut grouped = String::with_capacity(value.len() + integer.len() / 3);
@@ -260,8 +265,8 @@ fn result_line_highlights(line: &str) -> Vec<(Range<usize>, ResultHighlight)> {
     ));
 
     let function_text = &rest[colon_offset + 1..];
-    let function_start = command_end + colon_offset + 1 + function_text.len()
-        - function_text.trim_start().len();
+    let function_start =
+        command_end + colon_offset + 1 + function_text.len() - function_text.trim_start().len();
     let function_len = line[function_start..]
         .chars()
         .take_while(|ch| ch.is_ascii_alphabetic())
@@ -269,7 +274,10 @@ fn result_line_highlights(line: &str) -> Vec<(Range<usize>, ResultHighlight)> {
         .sum::<usize>();
 
     if function_len > 0 {
-        highlights.push((function_start..function_start + function_len, ResultHighlight::Function));
+        highlights.push((
+            function_start..function_start + function_len,
+            ResultHighlight::Function,
+        ));
     }
 
     highlights

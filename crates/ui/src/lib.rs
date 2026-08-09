@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod app;
 pub mod message;
 pub mod model;
