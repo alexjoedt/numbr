@@ -7,6 +7,18 @@ members = [
 ]
 resolver = "2"
 
+[workspace.package]
+version      = "0.1.1"
+authors      = ["Alex Joedt"]
+edition      = "2021"
+rust-version = "1.86.0"
+repository   = "https://github.com/alexjoedt/numbr"
+homepage     = "https://github.com/alexjoedt/numbr"
+readme       = "README.md"
+license      = "MIT OR Apache-2.0"
+keywords     = ["calculator", "wayland", "hyprland", "modbus", "units"]
+categories   = ["command-line-utilities", "mathematics"]
+
 [workspace.dependencies]
 thiserror    = "2"
 rust_decimal = { version = "1", features = ["maths"] }

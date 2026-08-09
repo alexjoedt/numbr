@@ -1,8 +1,16 @@
 [package]
-name    = "numbr-providers"
-version = "0.1.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+name        = "numbr-providers"
+description = "Offline foreign-exchange rate provider for numbr"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+repository.workspace   = true
+homepage.workspace     = true
+readme.workspace       = true
+license.workspace      = true
+keywords.workspace     = true
+categories.workspace   = true
+authors.workspace      = true
 
 [lints]
 workspace = true

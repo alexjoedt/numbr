@@ -1,8 +1,16 @@
 [package]
-name    = "numbr"
-version = "0.1.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+name        = "numbr"
+description = "Natural-language calculator for Linux/Wayland, optimized for Hyprland"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+repository.workspace   = true
+homepage.workspace     = true
+readme.workspace       = true
+license.workspace      = true
+keywords.workspace     = true
+categories.workspace   = true
+authors.workspace      = true
 
 [lints]
 workspace = true

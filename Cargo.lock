@@ -2136,7 +2136,7 @@ dependencies = [
 
 [[package]]
 name = "numbr"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "numbr-core",
  "numbr-ui",
@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "numbr-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "insta",
@@ -2156,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "numbr-providers"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rust_decimal",
  "serde",
@@ -2166,7 +2166,7 @@ dependencies = [
 
 [[package]]
 name = "numbr-ui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-io",
  "blocking",
