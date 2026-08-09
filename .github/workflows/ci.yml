@@ -14,6 +14,12 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, "1.86.0"] # 1.86.0 = rust-version in Cargo.toml (workspace MSRV)
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +28,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwayland-dev libxkbcommon-dev libegl-dev
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+
       - name: Cache Rust dependencies
         uses: actions/cache@v4
         with:
@@ -29,11 +41,28 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-${{ matrix.rust }}-
+
+      - name: Check formatting
+        if: matrix.rust == 'stable'
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        if: matrix.rust == 'stable'
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Build docs
+        if: matrix.rust == 'stable'
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
 
       - name: Run tests
+        if: matrix.rust == 'stable'
         run: cargo test --workspace
+
+      - name: Check (MSRV)
+        if: matrix.rust != 'stable'
+        run: cargo check --workspace
 
   release:
     name: Release
