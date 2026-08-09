@@ -1,0 +1,27 @@
+name: Security audit
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-deny:
+    name: cargo deny check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          # The action defaults to `--all-features`, which would activate
+          # optional features (e.g. rust_decimal's `rkyv`) never enabled by
+          # this workspace and audit a graph nobody actually builds. Empty
+          # this out so it matches plain `cargo deny check` as verified
+          # locally and configured in deny.toml.
+          arguments: ""
