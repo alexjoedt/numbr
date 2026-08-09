@@ -1,0 +1,82 @@
+# cargo-deny configuration. Run with `cargo deny check`.
+# https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+# numbr only ever ships for Linux (Wayland/Hyprland); the release workflow
+# builds and archives x86_64-unknown-linux-gnu exclusively. Restricting the
+# graph to it keeps the audit scoped to what's actually shipped instead of
+# hypothetical Windows/macOS builds this project never produces.
+targets = ["x86_64-unknown-linux-gnu"]
+
+[advisories]
+ignore = [
+    # Reached only via wayland-scanner, a build-time proc macro that parses
+    # Wayland protocol XML bundled inside the crate itself. No
+    # attacker-controlled XML reaches this app. quick-xml <- wayland-scanner
+    # <- smithay-client-toolkit/wayland-client <- winit <- iced.
+    # Revisit when iced upgrades its winit/smithay stack past this pin.
+    "RUSTSEC-2026-0195",
+    "RUSTSEC-2026-0194",
+    # crossbeam-epoch <- crossbeam-deque <- rayon <- cosmic-text <- iced.
+    # Triggers only when debug-formatting a dangling Atomic/Shared pointer,
+    # which this codebase never does. Fixed in >=0.9.20; try
+    # `cargo update -p crossbeam-epoch --precise 0.9.20` when iced permits.
+    "RUSTSEC-2026-0204",
+    # False positive: rust_decimal's optional `rkyv` feature is not enabled
+    # (workspace uses features = ["maths"]). Not present in the resolved
+    # dependency graph on any target (`cargo tree -i rkyv --workspace
+    # --target all` -> "nothing to print"); cargo's advisory scan flags it
+    # from Cargo.lock without feature resolution regardless.
+    "RUSTSEC-2026-0235",
+    # Maintainer-announced retirement, not a vulnerability: rustybuzz's
+    # author says it won't receive further fixes and points to `harfrust`.
+    # rustybuzz <- cosmic-text <- iced_glyphon/iced_graphics <- iced.
+    # `unmaintained` advisories default to checking the full transitive
+    # graph (unlike `unsound`, which defaults to workspace-only), so this
+    # needs an explicit entry even though it's several levels deep. Revisit
+    # when iced's text stack moves off cosmic-text/rustybuzz.
+    "RUSTSEC-2026-0206",
+    # Same situation: ttf-parser's author announced retirement, pointing to
+    # `skrifa`. Pulled in three ways, all through cosmic-text/iced: directly
+    # via fontdb, via rustybuzz, and via owned_ttf_parser <- ab_glyph <-
+    # sctk-adwaita <- winit. No safe upgrade exists; gated on upstream.
+    "RUSTSEC-2026-0192",
+]
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+# self_cell also offers GPL-2.0-only ("Apache-2.0 OR GPL-2.0-only"), but
+# Apache-2.0 is already in `allow` above, so the permissive branch of its
+# license expression is selected and no copyleft term is actually incurred.
+# r-efi (MIT OR Apache-2.0 OR LGPL-2.1-or-later) is in Cargo.lock but only
+# reached by getrandom's uefi backend; it drops out of the graph entirely
+# once scoped to x86_64-unknown-linux-gnu above.
+
+[licenses.private]
+ignore = false
+
+[bans]
+# The tree currently sits at two versions for ~18 crates (bitflags, objc2,
+# thiserror, ttf-parser, ...), all transitive through the iced/winit GUI
+# stack and none first-party. Denying multiple versions here would mean
+# maintaining a skip list for crates this repo doesn't control.
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
