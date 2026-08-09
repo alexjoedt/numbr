@@ -464,10 +464,9 @@ impl<'a, 'src> Parser<'a, 'src> {
 fn parse_bit_cast(s: &str) -> Option<BitCast> {
     let (signed, rest) = if let Some(rest) = s.strip_prefix("int") {
         (true, rest)
-    } else if let Some(rest) = s.strip_prefix("uint") {
-        (false, rest)
     } else {
-        return None;
+        let rest = s.strip_prefix("uint")?;
+        (false, rest)
     };
     let bits: u8 = rest.parse().ok()?;
     if matches!(bits, 8 | 16 | 32 | 64) {
