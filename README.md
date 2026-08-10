@@ -5,6 +5,8 @@
 A natural-language calculator for Linux/Wayland, optimized for Hyprland.
 Inspired by [Numi](https://numi.app), with a focus on developer workflows.
 
+![numbr running on Hyprland](assets/numbr.png)
+
 ```
 10 km in miles                   6.21371 miles
 sqrt(2) * 3                      4.242640687
@@ -19,7 +21,7 @@ today + 2 weeks                  2026-07-18
 
 - Arithmetic, percentages (`5% of 200`, `price - 20%`), variables, line references (`line1`)
 - Scientific functions: `sqrt`, `sin`, `cos`, `tan`, `log`, `ln`, `exp`, `abs`, …
-- Number systems: `0xFF`, `0b1010`, `0o17` — convert with `in hex`, `in binary`, `in octal`
+- Number systems: `0xFF`, `0b1010`, `0o17`; convert with `in hex`, `in binary`, `in octal`
 - Bit widths: `255 as int8` → `-1` (two's complement), `0xFFFF as int16` → `-1`
 - Bit operations: `&`, `|`, `^`, `~`, `<<`, `>>`, `popcount`, `clz`, `ctz`
 - Modbus register conversion: `modbus::float32`, `modbus::int32`, `modbus::uint32`, word-order variants
@@ -74,16 +76,16 @@ hl.window_rule({
 })
 ```
 
-Close the window when you are done — your session is saved automatically and
+Close the window when you are done. Your session is saved automatically and
 restored next time you open numbr.
 
 ## Usage tips
 
-- **Multi-line notebook** — each line is evaluated independently; previous results
+- **Multi-line notebook**: each line is evaluated independently; previous results
   are accessible as `line1`, `line2`, …
-- **Variables** — `price = 42; price * 3`
-- **Comments** — lines starting with `#` are ignored
-- **Clipboard** — click any result in the right column to copy it
+- **Variables**: `price = 42; price * 3`
+- **Comments**: lines starting with `#` are ignored
+- **Clipboard**: click any result in the right column to copy it
 
 ## Status
 
