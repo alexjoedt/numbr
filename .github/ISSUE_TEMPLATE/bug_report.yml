@@ -1,0 +1,58 @@
+name: Bug report
+description: Report something that behaves incorrectly or crashes
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: numbr version
+      description: Output of `numbr --version`, or the release tarball / commit you built from
+      placeholder: v0.1.1
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Linux distribution
+      placeholder: Arch Linux, Fedora 40, Ubuntu 24.04, ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: compositor
+    attributes:
+      label: Compositor
+      options:
+        - Hyprland
+        - niri
+        - Sway
+        - GNOME (Wayland)
+        - KDE Plasma (Wayland)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: input-expression
+    attributes:
+      label: Exact input expression
+      description: The exact line(s) you typed into numbr that misbehaved
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Include the panic message or stack trace if numbr crashed
+    validations:
+      required: true
