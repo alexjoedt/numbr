@@ -443,6 +443,51 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_unit_float_literal_in_years() {
+        // 0.1 in years should succeed the same way 1 in years does; the lexer
+        // produces a Value::Float for the literal, not a Value::Decimal.
+        let v = eval("0.1 in years");
+        match v {
+            Value::Unit { amount, unit } => {
+                assert_eq!(unit, "years");
+                let f = amount.to_f64().unwrap();
+                let expected = 0.1 * 86_400.0 / 31_557_600.0;
+                assert!(
+                    (f - expected).abs() < 0.000_01,
+                    "expected ~{expected} years, got {f}"
+                );
+            }
+            other => panic!("expected Value::Unit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_unit_float_literal_in_days_and_weeks() {
+        let v = eval("0.5 in days");
+        match v {
+            Value::Unit { amount, unit } => {
+                assert_eq!(unit, "days");
+                assert_eq!(amount.to_f64().unwrap(), 0.5);
+            }
+            other => panic!("expected Value::Unit, got {other:?}"),
+        }
+
+        let v = eval("2.5 in weeks");
+        match v {
+            Value::Unit { amount, unit } => {
+                assert_eq!(unit, "weeks");
+                let f = amount.to_f64().unwrap();
+                let expected = 2.5 * 86_400.0 / 604_800.0;
+                assert!(
+                    (f - expected).abs() < 0.000_01,
+                    "expected ~{expected} weeks, got {f}"
+                );
+            }
+            other => panic!("expected Value::Unit, got {other:?}"),
+        }
+    }
+
     // ── M3: Date arithmetic ───────────────────────────────────────────────
 
     #[test]
@@ -824,6 +869,37 @@ mod tests {
     fn test_negative_power() {
         // (-2) ** 3 = -8
         assert_eq!(eval("(-2) ** 3"), Value::Integer(-8));
+    }
+
+    #[test]
+    fn test_negate_unit_value() {
+        // Negation happens before conversion, so -1 celsius in K must give
+        // 272.15, not -274.15.
+        let v = eval("-1 celsius in K");
+        match v {
+            Value::Unit { amount, unit } => {
+                assert_eq!(unit, "K");
+                let f = amount.to_f64().unwrap();
+                assert!((f - 272.15).abs() < 0.001, "expected 272.15, got {f}");
+            }
+            other => panic!("expected Value::Unit, got {other:?}"),
+        }
+
+        let v = eval("-5 km in meters");
+        match v {
+            Value::Unit { amount, unit } => {
+                assert_eq!(unit, "meters");
+                let f = amount.to_f64().unwrap();
+                assert!((f - -5000.0).abs() < 0.001, "expected -5000, got {f}");
+            }
+            other => panic!("expected Value::Unit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_negate_non_numeric_is_type_error() {
+        let result = Engine::new().evaluate(r#"-"abc""#);
+        assert!(matches!(result, Err(EvalError::TypeError(_))));
     }
 
     #[test]
