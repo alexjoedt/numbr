@@ -170,6 +170,10 @@ impl Interpreter {
                 Value::Integer(n) => Ok(Value::Integer(-n)),
                 Value::Decimal(d) => Ok(Value::Decimal(-d)),
                 Value::Float(f) => Ok(Value::Float(-f)),
+                Value::Unit { amount, unit } => Ok(Value::Unit {
+                    amount: -amount,
+                    unit,
+                }),
                 other => Err(EvalError::TypeError(format!("cannot negate {other}"))),
             },
             UnOp::BitNot => match v {

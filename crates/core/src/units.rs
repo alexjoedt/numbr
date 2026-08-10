@@ -9,6 +9,7 @@ use rust_decimal::Decimal;
 /// - `Value::Unit { amount, unit }` → convert amount from `unit` to `target`
 /// - `Value::Integer(n)` → label with target (treating n as days for duration targets)
 /// - `Value::Decimal(d)` → label with target (treating d as days for duration targets)
+/// - `Value::Float(f)` → label with target (treating f as days for duration targets)
 pub fn convert_value(v: Value, target: &str) -> Result<Value, EvalError> {
     match v {
         Value::Unit { amount, ref unit } => {
@@ -37,6 +38,15 @@ pub fn convert_value(v: Value, target: &str) -> Result<Value, EvalError> {
                 EvalError::TypeError("decimal conversion requires numeric".into())
             })?;
             let result = convert_f64(a, "days", target)?;
+            Ok(Value::Unit {
+                amount: f64_to_decimal(result)?,
+                unit: target.to_owned(),
+            })
+        }
+
+        // A bare float literal labelled with a duration unit
+        Value::Float(f) if is_duration_unit(target) => {
+            let result = convert_f64(f, "days", target)?;
             Ok(Value::Unit {
                 amount: f64_to_decimal(result)?,
                 unit: target.to_owned(),
