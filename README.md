@@ -1,5 +1,7 @@
 # numbr
 
+[![CI](https://github.com/alexjoedt/numbr/actions/workflows/ci.yml/badge.svg)](https://github.com/alexjoedt/numbr/actions/workflows/ci.yml)
+
 A natural-language calculator for Linux/Wayland, optimized for Hyprland.
 Inspired by [Numi](https://numi.app), with a focus on developer workflows.
 
@@ -26,7 +28,28 @@ today + 2 weeks                  2026-07-18
 - Session persistence: last session is automatically restored on startup
 - Clipboard: click any result to copy it
 
-## Build
+## Platform
+
+numbr is a Wayland application and runs on Linux only. It does not build on macOS or
+Windows. Building requires the Wayland, xkbcommon and EGL development headers:
+
+```bash
+sudo apt install libwayland-dev libxkbcommon-dev libegl-dev   # Debian/Ubuntu
+sudo pacman -S wayland libxkbcommon mesa                      # Arch
+```
+
+## Install
+
+### Prebuilt binary
+
+Download the `x86_64-unknown-linux-gnu` tarball from the
+[releases page](https://github.com/alexjoedt/numbr/releases), extract it, and run
+`numbr` from anywhere on your `$PATH`.
+
+### From source
+
+Requires the system packages listed under [Platform](#platform) and Rust 1.86.0 or
+newer (MSRV).
 
 ```bash
 cargo build --release
@@ -61,6 +84,11 @@ restored next time you open numbr.
 - **Variables** — `price = 42; price * 3`
 - **Comments** — lines starting with `#` are ignored
 - **Clipboard** — click any result in the right column to copy it
+
+## Status
+
+numbr is alpha software (`0.x`). The expression syntax may change between releases and
+there is no stability guarantee yet.
 
 ## License
 
