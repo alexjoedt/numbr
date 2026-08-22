@@ -35,7 +35,10 @@ pub enum Token<'src> {
     })]
     OctInt(Option<i128>),
 
-    #[regex(r"[0-9][0-9_]*\.[0-9][0-9_]*([eE][+-]?[0-9]+)?", |lex| {
+    // Digits followed by either a fractional part (with optional exponent) or
+    // an exponent alone. The fractional part and the exponent must not both be
+    // optional: that would let every plain integer match and shadow DecInt.
+    #[regex(r"[0-9][0-9_]*(\.[0-9][0-9_]*([eE][+-]?[0-9]+)?|[eE][+-]?[0-9]+)", |lex| {
         lex.slice().replace('_', "").parse::<f64>().ok()
     })]
     Float(Option<f64>),
