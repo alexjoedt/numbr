@@ -168,6 +168,75 @@ mod tests {
         assert_eq!(v, Value::Str("0b11111111".to_owned()));
     }
 
+    // ── Scientific notation ───────────────────────────────────────────────
+
+    #[test]
+    fn test_scientific_notation_without_fraction() {
+        assert_eq!(eval("1e30"), Value::Float(1e30));
+    }
+
+    #[test]
+    fn test_scientific_notation_negative_exponent() {
+        assert_eq!(eval("1e-3"), Value::Float(0.001));
+    }
+
+    #[test]
+    fn test_scientific_notation_uppercase_and_plus() {
+        assert_eq!(eval("2E10"), Value::Float(2e10));
+        assert_eq!(eval("1e+3"), Value::Float(1000.0));
+    }
+
+    #[test]
+    fn test_scientific_notation_with_fraction_still_works() {
+        assert_eq!(eval("1.5e3"), Value::Float(1500.0));
+    }
+
+    #[test]
+    fn test_plain_integer_still_lexes_as_integer() {
+        assert_eq!(eval("30"), Value::Integer(30));
+        assert_eq!(eval("2 + 3"), Value::Integer(5));
+    }
+
+    #[test]
+    fn test_e_constant_still_works() {
+        assert!(matches!(eval("e"), Value::Float(f) if (f - std::f64::consts::E).abs() < 1e-12));
+    }
+
+    #[test]
+    fn test_space_before_exponent_is_a_parse_error() {
+        // "1 e30" is DecInt(1) followed by the unknown identifier "e30";
+        // whitespace stays significant rather than collapsing into 1e30.
+        let result = Engine::new().evaluate("1 e30");
+        assert!(matches!(result, Err(EvalError::ParseError { .. })));
+    }
+
+    #[test]
+    fn test_scientific_notation_composes_with_units() {
+        let v = eval("1e10 km in m");
+        match v {
+            Value::Unit { amount, unit } => {
+                assert_eq!(unit, "m");
+                let f = amount.to_f64().unwrap();
+                assert!((f - 1e13).abs() < 1.0, "expected 1e13, got {f}");
+            }
+            other => panic!("expected Value::Unit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_unit_amount_beyond_decimal_range_errors_cleanly() {
+        // Value::Unit stores amounts as rust_decimal::Decimal (max ~7.9e28),
+        // so 1e30 km cannot be represented. Same error as "1.0e30 km in m".
+        let result = Engine::new().evaluate("1e30 km in m");
+        assert!(matches!(result, Err(EvalError::TypeError(_))));
+    }
+
+    #[test]
+    fn test_scientific_notation_overflow_is_infinity() {
+        // Consistent with ln(0) -> -inf: non-finite floats are tolerated.
+        assert_eq!(eval("1e400"), Value::Float(f64::INFINITY));
+    }
+
     // ── Bit operations ────────────────────────────────────────────────────
 
     #[test]
