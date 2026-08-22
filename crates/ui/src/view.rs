@@ -197,7 +197,7 @@ pub fn view(model: &Model) -> Element<'_, Message> {
         .into()
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum ResultHighlight {
     Command,
     Function,
@@ -503,5 +503,106 @@ fn result_row(
             .width(Length::Fill)
             .padding(0)
             .into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_group_thousands_short_values_unchanged() {
+        assert_eq!(group_thousands("42"), "42", "input: 42");
+        assert_eq!(group_thousands("100"), "100", "input: 100");
+    }
+
+    #[test]
+    fn test_group_thousands_groups_integer_digits() {
+        assert_eq!(group_thousands("1000"), "1.000", "input: 1000");
+        assert_eq!(group_thousands("1234567"), "1.234.567", "input: 1234567");
+    }
+
+    #[test]
+    fn test_group_thousands_fraction_uses_comma() {
+        assert_eq!(group_thousands("1234.5"), "1.234,5", "input: 1234.5");
+    }
+
+    #[test]
+    fn test_group_thousands_negative() {
+        assert_eq!(group_thousands("-1234"), "-1.234", "input: -1234");
+    }
+
+    #[test]
+    fn test_group_thousands_empty_string() {
+        assert_eq!(group_thousands(""), "", "input: empty string");
+    }
+
+    #[test]
+    fn test_result_line_highlights_plain_line() {
+        assert_eq!(
+            result_line_highlights("result: sum"),
+            vec![
+                (0..6, ResultHighlight::Command),
+                (6..7, ResultHighlight::Command),
+                (8..11, ResultHighlight::Function),
+            ],
+            "input: 'result: sum'"
+        );
+    }
+
+    #[test]
+    fn test_result_line_highlights_leading_whitespace() {
+        assert_eq!(
+            result_line_highlights("  result: sum"),
+            vec![
+                (2..8, ResultHighlight::Command),
+                (8..9, ResultHighlight::Command),
+                (10..13, ResultHighlight::Function),
+            ],
+            "input: '  result: sum'"
+        );
+    }
+
+    #[test]
+    fn test_result_line_highlights_without_colon() {
+        assert_eq!(
+            result_line_highlights("result sum"),
+            vec![(0..6, ResultHighlight::Command)],
+            "input: 'result sum'"
+        );
+    }
+
+    #[test]
+    fn test_result_line_highlights_text_before_result() {
+        assert_eq!(
+            result_line_highlights("x result: sum"),
+            vec![],
+            "input: 'x result: sum'"
+        );
+    }
+
+    #[test]
+    fn test_result_line_highlights_non_ascii_after_colon() {
+        // "é" is not ASCII-alphabetic, so no function highlight; the byte
+        // arithmetic must still land on char boundaries without panicking.
+        assert_eq!(
+            result_line_highlights("result: étage"),
+            vec![
+                (0..6, ResultHighlight::Command),
+                (6..7, ResultHighlight::Command)
+            ],
+            "input: 'result: étage'"
+        );
+        // Multibyte whitespace before the function name: trim_start removes
+        // the two-byte NBSP, so the function range starts at byte 9.
+        assert_eq!(
+            result_line_highlights("result:\u{a0}sum"),
+            vec![
+                (0..6, ResultHighlight::Command),
+                (6..7, ResultHighlight::Command),
+                (9..12, ResultHighlight::Function),
+            ],
+            "input: 'result:<NBSP>sum'"
+        );
     }
 }

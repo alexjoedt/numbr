@@ -131,14 +131,18 @@ impl BackgroundConfig {
     /// Parse the hex color and apply the configured transparency as an `iced::Color`.
     pub fn to_iced_color(&self) -> iced::Color {
         let hex = self.color.trim_start_matches('#');
-        let (r, g, b) = match hex.len() {
-            3 => {
+        // Validate before slicing: hex.len() is a byte count, and slicing a
+        // string with multibyte characters by byte index panics. All-ASCII
+        // hex digits make the index arithmetic below safe.
+        let valid = hex.bytes().all(|b| b.is_ascii_hexdigit());
+        let (r, g, b) = match (valid, hex.len()) {
+            (true, 3) => {
                 let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(0x20);
                 let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(0x22);
                 let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(0x25);
                 (r, g, b)
             }
-            6 => {
+            (true, 6) => {
                 let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0x20);
                 let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0x22);
                 let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0x25);
@@ -235,5 +239,101 @@ impl Default for Model {
             settings: Settings::default(),
             settings_open: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn background(color: &str) -> BackgroundConfig {
+        BackgroundConfig {
+            color: color.into(),
+            transparency: 1.0,
+        }
+    }
+
+    fn default_iced_color() -> iced::Color {
+        iced::Color::from_rgba8(0x20, 0x22, 0x25, 1.0)
+    }
+
+    #[test]
+    fn test_to_iced_color_six_digit_hex() {
+        assert_eq!(
+            background("#202225").to_iced_color(),
+            iced::Color::from_rgba8(0x20, 0x22, 0x25, 1.0),
+            "input: #202225"
+        );
+    }
+
+    #[test]
+    fn test_to_iced_color_three_digit_shorthand() {
+        assert_eq!(
+            background("#fff").to_iced_color(),
+            iced::Color::from_rgba8(0xff, 0xff, 0xff, 1.0),
+            "input: #fff"
+        );
+    }
+
+    #[test]
+    fn test_to_iced_color_without_leading_hash() {
+        assert_eq!(
+            background("202225").to_iced_color(),
+            iced::Color::from_rgba8(0x20, 0x22, 0x25, 1.0),
+            "input: 202225"
+        );
+    }
+
+    #[test]
+    fn test_to_iced_color_multibyte_three_bytes_falls_back() {
+        // "é1" is three bytes; slicing it by byte index panicked before the
+        // hex-digit validation guard.
+        assert_eq!(
+            background("#é1").to_iced_color(),
+            default_iced_color(),
+            "input: #é1"
+        );
+    }
+
+    #[test]
+    fn test_to_iced_color_invalid_inputs_fall_back() {
+        assert_eq!(
+            background("").to_iced_color(),
+            default_iced_color(),
+            "input: empty"
+        );
+        assert_eq!(
+            background("#ééé").to_iced_color(),
+            default_iced_color(),
+            "input: #ééé"
+        );
+        assert_eq!(
+            background("#ab€").to_iced_color(),
+            default_iced_color(),
+            "input: #ab€"
+        );
+    }
+
+    #[test]
+    fn test_to_iced_color_clamps_transparency() {
+        let over = BackgroundConfig {
+            color: "#202225".into(),
+            transparency: 1.5,
+        };
+        assert_eq!(
+            over.to_iced_color().a,
+            1.0,
+            "transparency 1.5 clamps to 1.0"
+        );
+
+        let under = BackgroundConfig {
+            color: "#202225".into(),
+            transparency: -0.5,
+        };
+        assert_eq!(
+            under.to_iced_color().a,
+            0.0,
+            "transparency -0.5 clamps to 0.0"
+        );
     }
 }
