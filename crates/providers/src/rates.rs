@@ -34,25 +34,29 @@ impl OfflineProvider {
 impl RateProvider for OfflineProvider {
     fn rates(&self, base: &str) -> Result<BTreeMap<String, Decimal>, RateError> {
         let content = std::fs::read_to_string(&self.cache_path)?;
-        let json: Value =
-            serde_json::from_str(&content).map_err(|err| RateError::Parse(err.to_string()))?;
+        parse_cache(&content, base)
+    }
+}
 
-        // Supports either a flat `{ "USD": "1.0", ... }` cache or a nested
-        // `{ "rates": { "USD": { ... }, "EUR": { ... } } }` cache. Flat
-        // caches are assumed to already be expressed in the caller's base.
-        let rates = json.get("rates").unwrap_or(&json);
-        let rates = rates
-            .get(base)
-            .and_then(Value::as_object)
-            .or_else(|| rates.as_object())
-            .ok_or_else(|| RateError::Parse("rates cache must contain a JSON object".into()))?;
+fn parse_cache(content: &str, base: &str) -> Result<BTreeMap<String, Decimal>, RateError> {
+    let json: Value =
+        serde_json::from_str(content).map_err(|err| RateError::Parse(err.to_string()))?;
 
-        let rates = parse_rate_map(rates)?;
-        if rates.is_empty() {
-            Err(RateError::NotFound(base.to_owned()))
-        } else {
-            Ok(rates)
-        }
+    // Supports either a flat `{ "USD": "1.0", ... }` cache or a nested
+    // `{ "rates": { "USD": { ... }, "EUR": { ... } } }` cache. Flat
+    // caches are assumed to already be expressed in the caller's base.
+    let rates = json.get("rates").unwrap_or(&json);
+    let rates = rates
+        .get(base)
+        .and_then(Value::as_object)
+        .or_else(|| rates.as_object())
+        .ok_or_else(|| RateError::Parse("rates cache must contain a JSON object".into()))?;
+
+    let rates = parse_rate_map(rates)?;
+    if rates.is_empty() {
+        Err(RateError::NotFound(base.to_owned()))
+    } else {
+        Ok(rates)
     }
 }
 
