@@ -274,3 +274,211 @@ pub fn run() -> iced::Result {
         })
         .run_with(App::new)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Full evaluation of `text` with no cache to reuse.
+    fn from_scratch(text: &str) -> Vec<Value> {
+        evaluate_incremental(0, text.to_owned(), Vec::new()).1
+    }
+
+    fn cache_for(text: &str) -> Vec<CachedLine> {
+        evaluate_incremental(0, text.to_owned(), Vec::new()).2
+    }
+
+    /// Evaluate `edited` against the cache built from `initial` and return the
+    /// results, having first asserted they match a from-scratch evaluation.
+    fn incremental_after(initial: &str, edited: &str) -> Vec<Value> {
+        let cache = cache_for(initial);
+        let (_, results, _) = evaluate_incremental(1, edited.to_owned(), cache);
+        assert_eq!(
+            results,
+            from_scratch(edited),
+            "incremental != from scratch for:\n{edited}"
+        );
+        results
+    }
+
+    /// A cache whose results are replaced by sentinels. Any surviving sentinel
+    /// proves the entry was reused rather than recomputed; the `scope_after`
+    /// snapshots stay intact so later lines still evaluate correctly.
+    fn poisoned(text: &str) -> Vec<CachedLine> {
+        cache_for(text)
+            .into_iter()
+            .enumerate()
+            .map(|(idx, line)| CachedLine {
+                result: Value::Str(format!("cached-{idx}")),
+                ..line
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_evaluate_incremental_cold_start_matches_a_fresh_engine() {
+        let text = "1 + 1\nx = 10\nx * 2";
+        let (_, results, cache) = evaluate_incremental(0, text.to_owned(), Vec::new());
+
+        let mut engine = Engine::new();
+        let expected: Vec<Value> = text
+            .lines()
+            .map(|line| engine.evaluate_line(strip_comment(line)))
+            .collect();
+
+        assert_eq!(results, expected, "cold start must match a fresh engine");
+        assert_eq!(cache.len(), 3, "one cache entry per input line");
+    }
+
+    #[test]
+    fn test_evaluate_incremental_reevaluating_unchanged_text_is_a_no_op() {
+        let text = "x = 10\nx * 2\nline2 + 1";
+        let (_, first, cache) = evaluate_incremental(0, text.to_owned(), Vec::new());
+        let (_, second, second_cache) = evaluate_incremental(1, text.to_owned(), cache);
+
+        assert_eq!(
+            second, first,
+            "unchanged text must produce the same results"
+        );
+        assert_eq!(second_cache.len(), first.len(), "cache length is stable");
+    }
+
+    #[test]
+    fn test_evaluate_incremental_reuses_lines_above_an_unchanged_prefix() {
+        let text = "x = 10\nx * 2\nx + 5";
+        let (_, results, _) = evaluate_incremental(1, text.to_owned(), poisoned(text));
+
+        assert_eq!(
+            results,
+            vec![
+                Value::Str("cached-0".to_owned()),
+                Value::Str("cached-1".to_owned()),
+                Value::Str("cached-2".to_owned()),
+            ],
+            "every line is clean, so every cached result survives"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_incremental_edit_on_line_zero_recomputes_everything() {
+        let results = incremental_after("x = 10\nx * 2", "x = 20\nx * 2");
+
+        assert_eq!(
+            results,
+            vec![Value::Integer(20), Value::Integer(40)],
+            "the scope restarts from Scope::default() when line 0 is dirty"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_incremental_edit_on_line_zero_discards_the_cache() {
+        let (_, results, _) =
+            evaluate_incremental(1, "x = 20\nx * 2".to_owned(), poisoned("x = 10\nx * 2"));
+
+        assert_eq!(
+            results,
+            vec![Value::Integer(20), Value::Integer(40)],
+            "no sentinel may survive an edit on the first line"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_incremental_edit_mid_document_keeps_the_prefix() {
+        let initial = "x = 10\n1 + 1\nx * 2";
+        let (_, results, _) =
+            evaluate_incremental(1, "x = 10\n2 + 2\nx * 2".to_owned(), poisoned(initial));
+
+        assert_eq!(
+            results,
+            vec![
+                Value::Str("cached-0".to_owned()),
+                Value::Integer(4),
+                Value::Integer(20),
+            ],
+            "line 0 is reused; the edit and everything below it is recomputed"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_incremental_appending_a_line_keeps_earlier_results() {
+        let initial = "x = 10\nx * 2";
+        let results = incremental_after(initial, "x = 10\nx * 2\nx + 5");
+
+        assert_eq!(
+            results,
+            vec![Value::Integer(10), Value::Integer(20), Value::Integer(15)],
+            "an append leaves the existing lines alone"
+        );
+
+        let (_, cached_results, cache) =
+            evaluate_incremental(1, "x = 10\nx * 2\nx + 5".to_owned(), poisoned(initial));
+        assert_eq!(
+            cached_results[..2],
+            [
+                Value::Str("cached-0".to_owned()),
+                Value::Str("cached-1".to_owned())
+            ],
+            "the appended line does not dirty the lines above it"
+        );
+        assert_eq!(cache.len(), 3, "the cache grows by exactly one entry");
+    }
+
+    #[test]
+    fn test_evaluate_incremental_deleting_the_last_line_drops_one_entry() {
+        let initial = "x = 10\nx * 2\nx + 5";
+        let (_, results, cache) =
+            evaluate_incremental(1, "x = 10\nx * 2".to_owned(), cache_for(initial));
+
+        assert_eq!(results, from_scratch("x = 10\nx * 2"));
+        assert_eq!(cache.len(), 2, "the cache shrinks by exactly one entry");
+        assert_eq!(
+            cache.iter().map(|c| c.text.as_str()).collect::<Vec<_>>(),
+            ["x = 10", "x * 2"],
+            "no stale entry survives the truncation"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_incremental_invalidates_variable_dependents() {
+        let results = incremental_after("x = 10\nx * 2", "x = 20\nx * 2");
+
+        assert_eq!(
+            results[1],
+            Value::Integer(40),
+            "line 1 must follow the new value of x"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_incremental_invalidates_line_references() {
+        let results = incremental_after("100\nline1 + 10", "200\nline1 + 10");
+
+        assert_eq!(
+            results,
+            vec![Value::Integer(200), Value::Integer(210)],
+            "line references resolve against the recomputed line"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_incremental_editing_only_a_comment_is_not_dirty() {
+        let initial = "2 + 2 # note\nx = 1";
+        let (_, results, _) =
+            evaluate_incremental(1, "2 + 2 # other note\nx = 1".to_owned(), poisoned(initial));
+
+        assert_eq!(
+            results[0],
+            Value::Str("cached-0".to_owned()),
+            "comments are stripped before the dirty check, so the line is clean"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_incremental_returns_the_generation_unchanged() {
+        let (cold, _, cache) = evaluate_incremental(7, "1 + 1".to_owned(), Vec::new());
+        let (warm, _, _) = evaluate_incremental(42, "1 + 2".to_owned(), cache);
+
+        assert_eq!(cold, 7, "generation is passed through on a cold start");
+        assert_eq!(warm, 42, "generation is passed through on a warm start");
+    }
+}
