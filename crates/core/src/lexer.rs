@@ -43,6 +43,13 @@ pub enum Token<'src> {
     })]
     Float(Option<f64>),
 
+    // Same shape with `,` as the decimal separator. The parser decides whether
+    // this is one float or an integer, a comma and another number.
+    #[regex(r"[0-9][0-9_]*,[0-9][0-9_]*([eE][+-]?[0-9]+)?", |lex| {
+        lex.slice().replace('_', "").replace(',', ".").parse::<f64>().ok()
+    })]
+    FloatComma(Option<f64>),
+
     #[regex(r"[0-9][0-9_]*", |lex| {
         lex.slice().replace('_', "").parse::<i128>().ok()
     })]

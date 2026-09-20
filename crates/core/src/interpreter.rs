@@ -470,7 +470,8 @@ fn div_values(l: Value, r: Value) -> Result<Value, EvalError> {
     }
     let (l, r) = promote(l, r);
     match (l, r) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a / b)),
+        (Value::Integer(a), Value::Integer(b)) if a % b == 0 => Ok(Value::Integer(a / b)),
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Float(a as f64 / b as f64)),
         (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(a / b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
         (Value::Unit { amount, unit }, scalar) => {

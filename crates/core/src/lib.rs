@@ -14,6 +14,7 @@ pub mod value;
 
 pub use engine::{strip_comment, Engine};
 pub use error::{EvalError, FuncError};
+pub use parser::DecimalSeparator;
 pub use scope::Scope;
 pub use value::Value;
 
@@ -52,6 +53,13 @@ mod tests {
     #[test]
     fn test_integer_div() {
         assert_eq!(eval("10 / 2"), Value::Integer(5));
+    }
+
+    #[test]
+    fn test_integer_div_inexact_is_float() {
+        assert_eq!(eval("22 / 5"), Value::Float(4.4));
+        assert_eq!(eval("-7 / 2"), Value::Float(-3.5));
+        assert_eq!(eval("(22 / 5) * 5"), Value::Float(22.0));
     }
 
     #[test]
@@ -121,6 +129,60 @@ mod tests {
     fn test_pi_constant() {
         let v = eval("pi");
         assert!(matches!(v, Value::Float(f) if (f - std::f64::consts::PI).abs() < 1e-12));
+    }
+
+    // ── Decimal separator ─────────────────────────────────────────────────
+
+    fn eval_comma(input: &str) -> Value {
+        Engine::new()
+            .with_decimal_separator(DecimalSeparator::Comma)
+            .evaluate(input)
+            .expect("evaluation failed")
+    }
+
+    #[test]
+    fn test_point_separator_is_default() {
+        assert_eq!(eval("22.5 + 1"), Value::Float(23.5));
+        assert_eq!(
+            eval("modbus::int32(0,1)"),
+            Value::Integer(1),
+            "input: modbus::int32(0,1) splits into two arguments"
+        );
+        assert!(
+            Engine::new().evaluate("22,5").is_err(),
+            "`22,5` is not a number when `.` is the decimal separator"
+        );
+        assert!(
+            Engine::new().evaluate("abs(-1,5)").is_err(),
+            "`abs(-1,5)` passes two arguments when `.` is the decimal separator"
+        );
+    }
+
+    #[test]
+    fn test_comma_separator_reads_comma_floats() {
+        assert_eq!(eval_comma("22,5 + 1"), Value::Float(23.5));
+        assert_eq!(eval_comma("1_000,25"), Value::Float(1000.25));
+        assert_eq!(eval_comma("1,5e2"), Value::Float(150.0));
+        assert_eq!(
+            eval_comma("abs(-1,5)"),
+            Value::Float(1.5),
+            "input: abs(-1,5)"
+        );
+    }
+
+    #[test]
+    fn test_comma_separator_keeps_point_and_spaced_arguments() {
+        assert_eq!(eval_comma("22.5 + 1"), Value::Float(23.5));
+        assert_eq!(
+            eval_comma("modbus::int32(0, 1)"),
+            Value::Integer(1),
+            "input: modbus::int32(0, 1)"
+        );
+        assert_eq!(
+            eval_comma("modbus::int32(0, 1) + 0,5"),
+            Value::Float(1.5),
+            "input: modbus::int32(0, 1) + 0,5"
+        );
     }
 
     // ── Percentages ───────────────────────────────────────────────────────

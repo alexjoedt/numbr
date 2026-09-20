@@ -96,18 +96,39 @@ pub struct BitCast {
     pub bits: u8,
 }
 
+/// Which character separates the integer and fractional part of a number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DecimalSeparator {
+    /// `1.5` — international default. `,` separates function arguments.
+    #[default]
+    Point,
+    /// `1,5` — `1.5` stays accepted as well. Function arguments written as
+    /// `f(1,5)` are read as one number; use `f(1, 5)` for two.
+    Comma,
+}
+
 // ── Pratt parser ─────────────────────────────────────────────────────────────
 
 type TokenList<'src> = Vec<(Token<'src>, std::ops::Range<usize>)>;
 
 pub fn parse(input: &str) -> Result<Expr, EvalError> {
+    parse_with(input, DecimalSeparator::Point)
+}
+
+pub fn parse_with(input: &str, separator: DecimalSeparator) -> Result<Expr, EvalError> {
     let mut tokens = Vec::new();
     for (tok, span) in Token::lexer(input).spanned() {
         let tok = tok.map_err(|_| EvalError::ParseError {
             pos: span.start,
             message: format!("unexpected character '{}'", &input[span.clone()]),
         })?;
-        tokens.push((tok, span));
+        match (tok, separator) {
+            (Token::FloatComma(f), DecimalSeparator::Comma) => tokens.push((Token::Float(f), span)),
+            (Token::FloatComma(_), DecimalSeparator::Point) => {
+                split_comma_float(input, span, &mut tokens)
+            }
+            (tok, _) => tokens.push((tok, span)),
+        }
     }
 
     let mut p = Parser {
@@ -125,6 +146,32 @@ pub fn parse(input: &str) -> Result<Expr, EvalError> {
         });
     }
     Ok(expr)
+}
+
+/// Re-tokenise `12,5` as `12`, `,`, `5` when the comma is not the decimal
+/// separator. The lexer matched the longer float form greedily; both halves
+/// are plain digit runs (the right one may carry an exponent), so re-lexing
+/// them cannot fail.
+fn split_comma_float<'src>(
+    input: &'src str,
+    span: std::ops::Range<usize>,
+    tokens: &mut TokenList<'src>,
+) {
+    let slice = &input[span.clone()];
+    let comma = slice.find(',').expect("FloatComma token contains a comma");
+    let comma_at = span.start + comma;
+    let lhs = &slice[..comma];
+    tokens.push((
+        Token::DecInt(lhs.replace('_', "").parse::<i128>().ok()),
+        span.start..comma_at,
+    ));
+    tokens.push((Token::Comma, comma_at..comma_at + 1));
+    let rhs_start = comma_at + 1;
+    for (tok, rhs_span) in Token::lexer(&input[rhs_start..span.end]).spanned() {
+        if let Ok(tok) = tok {
+            tokens.push((tok, rhs_start + rhs_span.start..rhs_start + rhs_span.end));
+        }
+    }
 }
 
 struct Parser<'a, 'src> {
