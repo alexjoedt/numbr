@@ -3,7 +3,7 @@ use crate::error::EvalError;
 use crate::functions::FunctionProvider;
 use crate::interpreter::Interpreter;
 use crate::modbus::ModbusFunctions;
-use crate::parser;
+use crate::parser::{self, DecimalSeparator};
 use crate::scope::Scope;
 use crate::value::Value;
 use rust_decimal::Decimal;
@@ -11,6 +11,7 @@ use rust_decimal::Decimal;
 /// The public API of the `numbr-core` engine.
 pub struct Engine {
     interpreter: Interpreter,
+    decimal_separator: DecimalSeparator,
 }
 
 impl Engine {
@@ -23,6 +24,7 @@ impl Engine {
     pub fn with_providers(providers: Vec<Box<dyn FunctionProvider>>) -> Self {
         Self {
             interpreter: Interpreter::new(providers),
+            decimal_separator: DecimalSeparator::default(),
         }
     }
 
@@ -35,7 +37,14 @@ impl Engine {
                 scope,
                 vec![Box::new(BuiltinFunctions), Box::new(ModbusFunctions)],
             ),
+            decimal_separator: DecimalSeparator::default(),
         }
+    }
+
+    /// Set which character is read as the decimal separator in number literals.
+    pub fn with_decimal_separator(mut self, separator: DecimalSeparator) -> Self {
+        self.decimal_separator = separator;
+        self
     }
 
     /// Snapshot of the current scope (variables + line results recorded so far).
@@ -57,7 +66,7 @@ impl Engine {
         if let Some(command) = trimmed.strip_prefix("result:") {
             return self.evaluate_result_command(command.trim());
         }
-        let ast = parser::parse(trimmed)?;
+        let ast = parser::parse_with(trimmed, self.decimal_separator)?;
         self.interpreter.eval(&ast)
     }
 

@@ -109,6 +109,47 @@ impl FontWeight {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum DecimalSeparator {
+    #[default]
+    Point,
+    Comma,
+}
+
+impl DecimalSeparator {
+    pub fn all() -> &'static [DecimalSeparator] {
+        &[DecimalSeparator::Point, DecimalSeparator::Comma]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            DecimalSeparator::Point => "1,234.5",
+            DecimalSeparator::Comma => "1.234,5",
+        }
+    }
+
+    pub fn decimal_char(&self) -> char {
+        match self {
+            DecimalSeparator::Point => '.',
+            DecimalSeparator::Comma => ',',
+        }
+    }
+
+    pub fn thousands_char(&self) -> char {
+        match self {
+            DecimalSeparator::Point => ',',
+            DecimalSeparator::Comma => '.',
+        }
+    }
+
+    pub fn to_core(self) -> numbr_core::DecimalSeparator {
+        match self {
+            DecimalSeparator::Point => numbr_core::DecimalSeparator::Point,
+            DecimalSeparator::Comma => numbr_core::DecimalSeparator::Comma,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundConfig {
     /// Background base color as a hex string, e.g. `"#202225"` or `"#fff"`.
@@ -171,6 +212,8 @@ pub struct Settings {
     pub font_weight: FontWeight,
     #[serde(default)]
     pub background: BackgroundConfig,
+    #[serde(default)]
+    pub decimal_separator: DecimalSeparator,
 }
 
 impl Default for Settings {
@@ -180,6 +223,7 @@ impl Default for Settings {
             font_family: FontFamily::SystemMonospace,
             font_weight: FontWeight::Normal,
             background: BackgroundConfig::default(),
+            decimal_separator: DecimalSeparator::default(),
         }
     }
 }

@@ -1,7 +1,7 @@
 use iced::widget::text_editor;
 use iced::{widget, Element, Task, Theme};
 
-use numbr_core::{strip_comment, Engine, Scope, Value};
+use numbr_core::{strip_comment, DecimalSeparator, Engine, Scope, Value};
 use std::sync::atomic::Ordering;
 use tracing::{debug, trace, warn};
 
@@ -28,8 +28,12 @@ impl App {
             model.content = text_editor::Content::with_text(&saved);
             // Trigger an initial evaluation of the restored content.
             let text = model.content.text();
+            let separator = model.settings.decimal_separator.to_core();
             let task = Task::perform(
-                async move { blocking::unblock(move || evaluate_incremental(0, text, vec![])).await },
+                async move {
+                    blocking::unblock(move || evaluate_incremental(0, text, vec![], separator))
+                        .await
+                },
                 |(generation, results, cache)| Message::EvalResults {
                     generation,
                     results,
@@ -55,52 +59,7 @@ pub fn app_update(app: &mut App, message: Message) -> Task<Message> {
                 return Task::none();
             }
 
-            app.model.eval_generation = app.model.eval_generation.wrapping_add(1);
-            // Clear copy highlight on any edit.
-            app.model.copied_idx = None;
-
-            let generation = app.model.eval_generation;
-            let text = app.model.content.text();
-            let cache = app.model.line_cache.clone();
-            // Shared counter lets the async task abort before the blocking work
-            // if a newer keystroke has already bumped the generation.
-            let latest = app.model.latest_generation.clone();
-            latest.store(generation, Ordering::Relaxed);
-
-            debug!(
-                generation,
-                text_len = text.len(),
-                "EditorAction: scheduling eval"
-            );
-
-            // Debounce: wait 150 ms after the last keystroke before evaluating
-            // or persisting. After the timer fires, check whether another
-            // keystroke has already superseded this generation — if so, skip the
-            // blocking work entirely instead of running it just to discard it.
-            Task::perform(
-                async move {
-                    async_io::Timer::after(std::time::Duration::from_millis(150)).await;
-                    if latest.load(Ordering::Relaxed) != generation {
-                        // A newer keystroke arrived — bail out without any work.
-                        return Message::EvalCancelled { generation };
-                    }
-                    let (generation, results, cache) = blocking::unblock(move || {
-                        if latest.load(Ordering::Relaxed) == generation {
-                            if let Err(err) = persist::save(&text) {
-                                warn!(%err, "failed to save session");
-                            }
-                        }
-                        evaluate_incremental(generation, text, cache)
-                    })
-                    .await;
-                    Message::EvalResults {
-                        generation,
-                        results,
-                        cache,
-                    }
-                },
-                |message| message,
-            )
+            schedule_evaluation(app)
         }
 
         Message::EvalResults {
@@ -192,7 +151,69 @@ pub fn app_update(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
+        Message::SetDecimalSeparator(separator) => {
+            if app.model.settings.decimal_separator == separator {
+                return Task::none();
+            }
+            app.model.settings.decimal_separator = separator;
+            if let Err(err) = persist::save_settings(&app.model.settings) {
+                warn!(%err, "failed to save settings");
+            }
+            // Every line may parse differently now, so drop the cache and
+            // re-evaluate from the top.
+            app.model.line_cache.clear();
+            schedule_evaluation(app)
+        }
     }
+}
+
+/// Debounced evaluation of the current editor content.
+///
+/// Waits 150 ms after the last change before evaluating or persisting. After
+/// the timer fires, checks whether another change has already superseded this
+/// generation — if so, skips the blocking work entirely instead of running it
+/// just to discard it.
+fn schedule_evaluation(app: &mut App) -> Task<Message> {
+    app.model.eval_generation = app.model.eval_generation.wrapping_add(1);
+    // Clear copy highlight on any change.
+    app.model.copied_idx = None;
+
+    let generation = app.model.eval_generation;
+    let text = app.model.content.text();
+    let cache = app.model.line_cache.clone();
+    let separator = app.model.settings.decimal_separator.to_core();
+    // Shared counter lets the async task abort before the blocking work
+    // if a newer keystroke has already bumped the generation.
+    let latest = app.model.latest_generation.clone();
+    latest.store(generation, Ordering::Relaxed);
+
+    debug!(generation, text_len = text.len(), "scheduling eval");
+
+    Task::perform(
+        async move {
+            async_io::Timer::after(std::time::Duration::from_millis(150)).await;
+            if latest.load(Ordering::Relaxed) != generation {
+                // A newer keystroke arrived — bail out without any work.
+                return Message::EvalCancelled { generation };
+            }
+            let (generation, results, cache) = blocking::unblock(move || {
+                if latest.load(Ordering::Relaxed) == generation {
+                    if let Err(err) = persist::save(&text) {
+                        warn!(%err, "failed to save session");
+                    }
+                }
+                evaluate_incremental(generation, text, cache, separator)
+            })
+            .await;
+            Message::EvalResults {
+                generation,
+                results,
+                cache,
+            }
+        },
+        |message| message,
+    )
 }
 
 /// Incremental evaluation: find the first changed line, restore the scope
@@ -204,6 +225,7 @@ fn evaluate_incremental(
     generation: u64,
     text: String,
     cache: Vec<CachedLine>,
+    separator: DecimalSeparator,
 ) -> (u64, Vec<Value>, Vec<CachedLine>) {
     let new_lines: Vec<&str> = text.lines().map(strip_comment).collect();
 
@@ -231,7 +253,7 @@ fn evaluate_incremental(
         cache[first_dirty - 1].scope_after.clone()
     };
 
-    let mut engine = Engine::with_scope(initial_scope);
+    let mut engine = Engine::with_scope(initial_scope).with_decimal_separator(separator);
 
     // Reuse cached entries above the dirty line; re-evaluate from it onwards.
     let mut new_cache: Vec<CachedLine> = cache[..first_dirty].to_vec();
@@ -281,18 +303,19 @@ mod tests {
 
     /// Full evaluation of `text` with no cache to reuse.
     fn from_scratch(text: &str) -> Vec<Value> {
-        evaluate_incremental(0, text.to_owned(), Vec::new()).1
+        evaluate_incremental(0, text.to_owned(), Vec::new(), DecimalSeparator::Point).1
     }
 
     fn cache_for(text: &str) -> Vec<CachedLine> {
-        evaluate_incremental(0, text.to_owned(), Vec::new()).2
+        evaluate_incremental(0, text.to_owned(), Vec::new(), DecimalSeparator::Point).2
     }
 
     /// Evaluate `edited` against the cache built from `initial` and return the
     /// results, having first asserted they match a from-scratch evaluation.
     fn incremental_after(initial: &str, edited: &str) -> Vec<Value> {
         let cache = cache_for(initial);
-        let (_, results, _) = evaluate_incremental(1, edited.to_owned(), cache);
+        let (_, results, _) =
+            evaluate_incremental(1, edited.to_owned(), cache, DecimalSeparator::Point);
         assert_eq!(
             results,
             from_scratch(edited),
@@ -318,7 +341,8 @@ mod tests {
     #[test]
     fn test_evaluate_incremental_cold_start_matches_a_fresh_engine() {
         let text = "1 + 1\nx = 10\nx * 2";
-        let (_, results, cache) = evaluate_incremental(0, text.to_owned(), Vec::new());
+        let (_, results, cache) =
+            evaluate_incremental(0, text.to_owned(), Vec::new(), DecimalSeparator::Point);
 
         let mut engine = Engine::new();
         let expected: Vec<Value> = text
@@ -333,8 +357,10 @@ mod tests {
     #[test]
     fn test_evaluate_incremental_reevaluating_unchanged_text_is_a_no_op() {
         let text = "x = 10\nx * 2\nline2 + 1";
-        let (_, first, cache) = evaluate_incremental(0, text.to_owned(), Vec::new());
-        let (_, second, second_cache) = evaluate_incremental(1, text.to_owned(), cache);
+        let (_, first, cache) =
+            evaluate_incremental(0, text.to_owned(), Vec::new(), DecimalSeparator::Point);
+        let (_, second, second_cache) =
+            evaluate_incremental(1, text.to_owned(), cache, DecimalSeparator::Point);
 
         assert_eq!(
             second, first,
@@ -346,7 +372,8 @@ mod tests {
     #[test]
     fn test_evaluate_incremental_reuses_lines_above_an_unchanged_prefix() {
         let text = "x = 10\nx * 2\nx + 5";
-        let (_, results, _) = evaluate_incremental(1, text.to_owned(), poisoned(text));
+        let (_, results, _) =
+            evaluate_incremental(1, text.to_owned(), poisoned(text), DecimalSeparator::Point);
 
         assert_eq!(
             results,
@@ -372,8 +399,12 @@ mod tests {
 
     #[test]
     fn test_evaluate_incremental_edit_on_line_zero_discards_the_cache() {
-        let (_, results, _) =
-            evaluate_incremental(1, "x = 20\nx * 2".to_owned(), poisoned("x = 10\nx * 2"));
+        let (_, results, _) = evaluate_incremental(
+            1,
+            "x = 20\nx * 2".to_owned(),
+            poisoned("x = 10\nx * 2"),
+            DecimalSeparator::Point,
+        );
 
         assert_eq!(
             results,
@@ -385,8 +416,12 @@ mod tests {
     #[test]
     fn test_evaluate_incremental_edit_mid_document_keeps_the_prefix() {
         let initial = "x = 10\n1 + 1\nx * 2";
-        let (_, results, _) =
-            evaluate_incremental(1, "x = 10\n2 + 2\nx * 2".to_owned(), poisoned(initial));
+        let (_, results, _) = evaluate_incremental(
+            1,
+            "x = 10\n2 + 2\nx * 2".to_owned(),
+            poisoned(initial),
+            DecimalSeparator::Point,
+        );
 
         assert_eq!(
             results,
@@ -410,8 +445,12 @@ mod tests {
             "an append leaves the existing lines alone"
         );
 
-        let (_, cached_results, cache) =
-            evaluate_incremental(1, "x = 10\nx * 2\nx + 5".to_owned(), poisoned(initial));
+        let (_, cached_results, cache) = evaluate_incremental(
+            1,
+            "x = 10\nx * 2\nx + 5".to_owned(),
+            poisoned(initial),
+            DecimalSeparator::Point,
+        );
         assert_eq!(
             cached_results[..2],
             [
@@ -426,8 +465,12 @@ mod tests {
     #[test]
     fn test_evaluate_incremental_deleting_the_last_line_drops_one_entry() {
         let initial = "x = 10\nx * 2\nx + 5";
-        let (_, results, cache) =
-            evaluate_incremental(1, "x = 10\nx * 2".to_owned(), cache_for(initial));
+        let (_, results, cache) = evaluate_incremental(
+            1,
+            "x = 10\nx * 2".to_owned(),
+            cache_for(initial),
+            DecimalSeparator::Point,
+        );
 
         assert_eq!(results, from_scratch("x = 10\nx * 2"));
         assert_eq!(cache.len(), 2, "the cache shrinks by exactly one entry");
@@ -463,8 +506,12 @@ mod tests {
     #[test]
     fn test_evaluate_incremental_editing_only_a_comment_is_not_dirty() {
         let initial = "2 + 2 # note\nx = 1";
-        let (_, results, _) =
-            evaluate_incremental(1, "2 + 2 # other note\nx = 1".to_owned(), poisoned(initial));
+        let (_, results, _) = evaluate_incremental(
+            1,
+            "2 + 2 # other note\nx = 1".to_owned(),
+            poisoned(initial),
+            DecimalSeparator::Point,
+        );
 
         assert_eq!(
             results[0],
@@ -475,8 +522,10 @@ mod tests {
 
     #[test]
     fn test_evaluate_incremental_returns_the_generation_unchanged() {
-        let (cold, _, cache) = evaluate_incremental(7, "1 + 1".to_owned(), Vec::new());
-        let (warm, _, _) = evaluate_incremental(42, "1 + 2".to_owned(), cache);
+        let (cold, _, cache) =
+            evaluate_incremental(7, "1 + 1".to_owned(), Vec::new(), DecimalSeparator::Point);
+        let (warm, _, _) =
+            evaluate_incremental(42, "1 + 2".to_owned(), cache, DecimalSeparator::Point);
 
         assert_eq!(cold, 7, "generation is passed through on a cold start");
         assert_eq!(warm, 42, "generation is passed through on a warm start");

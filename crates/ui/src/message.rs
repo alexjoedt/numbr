@@ -1,6 +1,6 @@
 use numbr_core::Value;
 
-use crate::model::{CachedLine, FontFamily, FontWeight};
+use crate::model::{CachedLine, DecimalSeparator, FontFamily, FontWeight};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -30,4 +30,6 @@ pub enum Message {
     SetFontFamily(FontFamily),
     /// Set the editor/result font weight.
     SetFontWeight(FontWeight),
+    /// Set the decimal separator used to parse and display numbers.
+    SetDecimalSeparator(DecimalSeparator),
 }
