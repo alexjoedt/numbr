@@ -9,26 +9,26 @@ const WINDOW_PADDING: f32 = 34.0;
 const ROW_SPACING: f32 = 10.0;
 const COLUMN_GAP: f32 = 30.0;
 const BOTTOM_BAR_H: f32 = 30.0;
-const SETTINGS_PANEL_H: f32 = 136.0;
+const SETTINGS_PANEL_H: f32 = 178.0;
 
 use crate::message::Message;
-use crate::model::{FontFamily, FontWeight, Model};
+use crate::model::{DecimalSeparator, FontFamily, FontWeight, Model};
 use crate::theme;
 use numbr_core::Value;
 
-fn format_result_value(value: &Value) -> String {
+fn format_result_value(value: &Value, separator: DecimalSeparator) -> String {
     match value {
-        Value::Decimal(d) => group_thousands(&d.to_string()),
-        Value::Float(_) | Value::Integer(_) => group_thousands(&value.to_string()),
+        Value::Decimal(d) => group_thousands(&d.to_string(), separator),
+        Value::Float(_) | Value::Integer(_) => group_thousands(&value.to_string(), separator),
         Value::Unit { amount, unit } => format!(
             "{} {unit}",
-            group_thousands(&amount.normalize().to_string())
+            group_thousands(&amount.normalize().to_string(), separator)
         ),
         _ => value.to_string(),
     }
 }
 
-fn group_thousands(value: &str) -> String {
+fn group_thousands(value: &str, separator: DecimalSeparator) -> String {
     let (sign, unsigned) = value
         .strip_prefix('-')
         .map_or(("", value), |rest| ("-", rest));
@@ -39,13 +39,13 @@ fn group_thousands(value: &str) -> String {
 
     for (idx, ch) in integer.chars().enumerate() {
         if idx > 0 && (integer.len() - idx) % 3 == 0 {
-            grouped.push('.');
+            grouped.push(separator.thousands_char());
         }
         grouped.push(ch);
     }
 
     if !fraction.is_empty() {
-        grouped.push(',');
+        grouped.push(separator.decimal_char());
         grouped.push_str(fraction);
     }
 
@@ -66,7 +66,16 @@ pub fn view(model: &Model) -> Element<'_, Message> {
         .results
         .iter()
         .enumerate()
-        .map(|(idx, v)| result_row(idx, v, model.copied_idx == Some(idx), font_size, line_h))
+        .map(|(idx, v)| {
+            result_row(
+                idx,
+                v,
+                model.copied_idx == Some(idx),
+                font_size,
+                line_h,
+                model.settings.decimal_separator,
+            )
+        })
         .collect();
 
     let result_col = scrollable(column(results).spacing(0).padding(iced::Padding {
@@ -413,7 +422,43 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
     .spacing(6)
     .align_y(iced::alignment::Vertical::Center);
 
-    let panel_content = column![size_row, family_row, weight_row]
+    // --- Decimal separator row ---
+    let separator_buttons: Vec<Element<Message>> = DecimalSeparator::all()
+        .iter()
+        .map(|separator| {
+            let selected = &model.settings.decimal_separator == separator;
+            button(text(separator.label()).size(12))
+                .on_press(Message::SetDecimalSeparator(*separator))
+                .style(move |_, _| button::Style {
+                    background: None,
+                    border: Border {
+                        color: Color::TRANSPARENT,
+                        width: 0.0,
+                        radius: 4.0.into(),
+                    },
+                    text_color: if selected { theme::ACCENT } else { theme::TEXT },
+                    shadow: iced::Shadow::default(),
+                })
+                .padding(iced::Padding {
+                    top: 3.0,
+                    bottom: 3.0,
+                    left: 8.0,
+                    right: 8.0,
+                })
+                .into()
+        })
+        .collect();
+
+    let separator_row = row(
+        std::iter::once(text("Decimal").size(12).color(theme::TEXT).into())
+            .chain(std::iter::once(Space::with_width(Length::Fill).into()))
+            .chain(separator_buttons)
+            .collect::<Vec<_>>(),
+    )
+    .spacing(6)
+    .align_y(iced::alignment::Vertical::Center);
+
+    let panel_content = column![size_row, family_row, weight_row, separator_row]
         .spacing(ROW_SPACING)
         .padding(iced::Padding {
             top: 10.0,
@@ -449,6 +494,7 @@ fn result_row(
     copied: bool,
     font_size: f32,
     line_h: f32,
+    separator: DecimalSeparator,
 ) -> Element<'static, Message> {
     let is_error = matches!(value, Value::Err(_));
     let is_empty = matches!(value, Value::Str(s) if s.is_empty());
@@ -468,7 +514,7 @@ fn result_row(
             .size(small_size)
             .align_x(iced::alignment::Horizontal::Right)
     } else {
-        text(format_result_value(value))
+        text(format_result_value(value, separator))
             .color(color)
             .size(font_size)
             .align_x(iced::alignment::Horizontal::Right)
@@ -510,31 +556,46 @@ fn result_row(
 mod tests {
     use super::*;
 
+    const POINT: DecimalSeparator = DecimalSeparator::Point;
+    const COMMA: DecimalSeparator = DecimalSeparator::Comma;
+
     #[test]
     fn test_group_thousands_short_values_unchanged() {
-        assert_eq!(group_thousands("42"), "42", "input: 42");
-        assert_eq!(group_thousands("100"), "100", "input: 100");
+        assert_eq!(group_thousands("42", POINT), "42", "input: 42");
+        assert_eq!(group_thousands("100", COMMA), "100", "input: 100");
     }
 
     #[test]
     fn test_group_thousands_groups_integer_digits() {
-        assert_eq!(group_thousands("1000"), "1.000", "input: 1000");
-        assert_eq!(group_thousands("1234567"), "1.234.567", "input: 1234567");
+        assert_eq!(group_thousands("1000", POINT), "1,000", "input: 1000");
+        assert_eq!(
+            group_thousands("1234567", POINT),
+            "1,234,567",
+            "input: 1234567"
+        );
+        assert_eq!(
+            group_thousands("1234567", COMMA),
+            "1.234.567",
+            "input: 1234567"
+        );
     }
 
     #[test]
-    fn test_group_thousands_fraction_uses_comma() {
-        assert_eq!(group_thousands("1234.5"), "1.234,5", "input: 1234.5");
+    fn test_group_thousands_fraction_follows_separator() {
+        assert_eq!(group_thousands("1234.5", POINT), "1,234.5", "input: 1234.5");
+        assert_eq!(group_thousands("1234.5", COMMA), "1.234,5", "input: 1234.5");
+        assert_eq!(group_thousands("4.4", COMMA), "4,4", "input: 4.4");
     }
 
     #[test]
     fn test_group_thousands_negative() {
-        assert_eq!(group_thousands("-1234"), "-1.234", "input: -1234");
+        assert_eq!(group_thousands("-1234", POINT), "-1,234", "input: -1234");
+        assert_eq!(group_thousands("-1234", COMMA), "-1.234", "input: -1234");
     }
 
     #[test]
     fn test_group_thousands_empty_string() {
-        assert_eq!(group_thousands(""), "", "input: empty string");
+        assert_eq!(group_thousands("", POINT), "", "input: empty string");
     }
 
     #[test]
