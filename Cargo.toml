@@ -26,7 +26,7 @@ logos        = "0.16"
 insta        = { version = "1", features = ["ron"] }
 chrono       = { version = "0.4", default-features = false, features = ["std", "clock"] }
 serde        = { version = "1", features = ["derive"] }
-iced         = { version = "0.13", features = ["advanced", "multi-window"] }
+iced         = { version = "0.14", features = ["advanced"] }
 tracing             = "0.1"
 tracing-subscriber  = { version = "0.3", features = ["env-filter"] }
 

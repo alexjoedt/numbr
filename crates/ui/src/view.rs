@@ -59,7 +59,8 @@ pub fn view(model: &Model) -> Element<'_, Message> {
     let font = model.settings.to_iced_font();
     let text_content = model.content.text();
     let line_count = text_content.lines().count().max(1);
-    let (cursor_line, cursor_col) = model.content.cursor_position();
+    let cursor = model.content.cursor().position;
+    let (cursor_line, cursor_col) = (cursor.line, cursor.column);
 
     // Build the result column.
     let results: Vec<Element<Message>> = model
@@ -103,7 +104,6 @@ pub fn view(model: &Model) -> Element<'_, Message> {
                 width: 0.0,
                 radius: 0.0.into(),
             },
-            icon: iced::Color::TRANSPARENT,
             placeholder: theme::DIVIDER,
             value: theme::TEXT,
             selection: theme::ACCENT,
@@ -119,7 +119,7 @@ pub fn view(model: &Model) -> Element<'_, Message> {
 
     let main_content = row![
         editor_col,
-        Space::with_width(Length::Fixed(COLUMN_GAP)),
+        Space::new().width(Length::Fixed(COLUMN_GAP)),
         result_col,
     ]
     .height(Length::Fill);
@@ -159,6 +159,7 @@ pub fn view(model: &Model) -> Element<'_, Message> {
         },
         text_color: theme::TEXT,
         shadow: iced::Shadow::default(),
+        snap: false,
     })
     .padding(iced::Padding {
         top: 4.0,
@@ -177,11 +178,11 @@ pub fn view(model: &Model) -> Element<'_, Message> {
 
     let bottom_bar = container(
         row![
-            Space::with_width(Length::Fixed(10.0)),
+            Space::new().width(Length::Fixed(10.0)),
             status_pos,
-            Space::with_width(Length::Fixed(16.0)),
+            Space::new().width(Length::Fixed(16.0)),
             status_lines,
-            Space::with_width(Length::Fill),
+            Space::new().width(Length::Fill),
             settings_btn,
         ]
         .align_y(iced::alignment::Vertical::Center),
@@ -307,6 +308,7 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
             },
             text_color: theme::TEXT,
             shadow: iced::Shadow::default(),
+            snap: false,
         })
         .padding(iced::Padding {
             top: 2.0,
@@ -326,6 +328,7 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
             },
             text_color: theme::TEXT,
             shadow: iced::Shadow::default(),
+            snap: false,
         })
         .padding(iced::Padding {
             top: 2.0,
@@ -340,7 +343,7 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
 
     let size_row = row![
         text("Font Size").size(12).color(theme::TEXT),
-        Space::with_width(Length::Fill),
+        Space::new().width(Length::Fill),
         size_dec,
         container(size_label)
             .width(Length::Fixed(44.0))
@@ -366,6 +369,7 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
                     },
                     text_color: if selected { theme::ACCENT } else { theme::TEXT },
                     shadow: iced::Shadow::default(),
+                    snap: false,
                 })
                 .padding(iced::Padding {
                     top: 3.0,
@@ -379,7 +383,7 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
 
     let family_row = row(
         std::iter::once(text("Font").size(12).color(theme::TEXT).into())
-            .chain(std::iter::once(Space::with_width(Length::Fill).into()))
+            .chain(std::iter::once(Space::new().width(Length::Fill).into()))
             .chain(family_buttons)
             .collect::<Vec<_>>(),
     )
@@ -402,6 +406,7 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
                     },
                     text_color: if selected { theme::ACCENT } else { theme::TEXT },
                     shadow: iced::Shadow::default(),
+                    snap: false,
                 })
                 .padding(iced::Padding {
                     top: 3.0,
@@ -415,7 +420,7 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
 
     let weight_row = row(
         std::iter::once(text("Weight").size(12).color(theme::TEXT).into())
-            .chain(std::iter::once(Space::with_width(Length::Fill).into()))
+            .chain(std::iter::once(Space::new().width(Length::Fill).into()))
             .chain(weight_buttons)
             .collect::<Vec<_>>(),
     )
@@ -438,6 +443,7 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
                     },
                     text_color: if selected { theme::ACCENT } else { theme::TEXT },
                     shadow: iced::Shadow::default(),
+                    snap: false,
                 })
                 .padding(iced::Padding {
                     top: 3.0,
@@ -451,7 +457,7 @@ fn settings_panel(model: &Model) -> Element<'_, Message> {
 
     let separator_row = row(
         std::iter::once(text("Decimal").size(12).color(theme::TEXT).into())
-            .chain(std::iter::once(Space::with_width(Length::Fill).into()))
+            .chain(std::iter::once(Space::new().width(Length::Fill).into()))
             .chain(separator_buttons)
             .collect::<Vec<_>>(),
     )
@@ -545,6 +551,7 @@ fn result_row(
                 },
                 text_color: color,
                 shadow: iced::Shadow::default(),
+                snap: false,
             })
             .width(Length::Fill)
             .padding(0)
