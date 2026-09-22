@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust: [stable, "1.86.0"] # 1.86.0 = rust-version in Cargo.toml (workspace MSRV)
+        rust: [stable, "1.90.0"] # 1.90.0 = rust-version in Cargo.toml (workspace MSRV)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

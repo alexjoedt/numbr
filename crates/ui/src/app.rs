@@ -22,7 +22,7 @@ impl App {
             settings: persist::load_settings(),
             ..Model::default()
         };
-        let focus_editor = widget::focus_next();
+        let focus_editor = widget::operation::focus_next();
 
         if let Some(saved) = persist::load() {
             model.content = text_editor::Content::with_text(&saved);
@@ -277,9 +277,10 @@ pub fn app_view(app: &App) -> Element<'_, Message> {
 }
 
 pub fn run() -> iced::Result {
-    iced::application("numbr", app_update, app_view)
-        .theme(|_| Theme::Dark)
-        .style(|app: &App, _theme| iced::application::Appearance {
+    iced::application(App::new, app_update, app_view)
+        .title("numbr")
+        .theme(|_: &App| Theme::Dark)
+        .style(|app: &App, _theme| iced::theme::Style {
             background_color: app.model.settings.background.to_iced_color(),
             text_color: iced::Color::WHITE,
         })
@@ -294,7 +295,7 @@ pub fn run() -> iced::Result {
             },
             ..Default::default()
         })
-        .run_with(App::new)
+        .run()
 }
 
 #[cfg(test)]

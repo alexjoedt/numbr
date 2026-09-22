@@ -50,7 +50,7 @@ Download the `x86_64-unknown-linux-gnu` tarball from the
 
 ### From source
 
-Requires the system packages listed under [Platform](#platform) and Rust 1.86.0 or
+Requires the system packages listed under [Platform](#platform) and Rust 1.90.0 or
 newer (MSRV).
 
 ```bash
