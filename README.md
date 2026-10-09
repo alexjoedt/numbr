@@ -94,6 +94,9 @@ restored next time you open numbr.
 - **Comments**: lines starting with `#` are ignored
 - **Clipboard**: click any result in the right column to copy it
 
+The full syntax, operator precedence and `result:` aggregates are documented in
+[docs/grammar.md](docs/grammar.md).
+
 ## Status
 
 numbr is alpha software (`0.x`). The expression syntax may change between releases and
