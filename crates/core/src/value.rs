@@ -1,6 +1,9 @@
 use chrono::{NaiveDate, NaiveDateTime};
+use rust_decimal::prelude::FromPrimitive;
 use rust_decimal::Decimal;
 use std::fmt;
+
+use crate::error::EvalError;
 
 /// A computed value from the engine.
 #[derive(Debug, Clone, PartialEq)]
@@ -61,10 +64,18 @@ impl Value {
 
     /// Promote to Decimal for exact arithmetic.
     pub fn to_decimal(&self) -> Option<Decimal> {
+        self.try_decimal()?.ok()
+    }
+
+    /// `None` for a non-numeric value, a range error for a number `Decimal` cannot hold.
+    pub(crate) fn try_decimal(&self) -> Option<Result<Decimal, EvalError>> {
         match self {
-            Value::Decimal(d) => Some(*d),
-            Value::Integer(i) => Some(Decimal::from(*i)),
-            Value::Float(v) => Decimal::try_from(*v).ok(),
+            Value::Decimal(d) => Some(Ok(*d)),
+            Value::Integer(i) => Some(int_to_decimal(*i)),
+            Value::Float(v) => Some(
+                Decimal::try_from(*v)
+                    .map_err(|_| EvalError::TypeError(format!("{v} is out of Decimal range"))),
+            ),
             _ => None,
         }
     }
@@ -90,4 +101,9 @@ impl Value {
             _ => None,
         }
     }
+}
+
+pub(crate) fn int_to_decimal(n: i128) -> Result<Decimal, EvalError> {
+    Decimal::from_i128(n)
+        .ok_or_else(|| EvalError::TypeError("integer is out of Decimal range".into()))
 }

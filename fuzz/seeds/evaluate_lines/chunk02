@@ -1,0 +1,10 @@
+0xFFFF as int16
+0xFFFF as uint16
+0xFFFFFFFF as int32
+0xFFFFFFFF as uint32
+0xFF in binary
+1.
+1 / 0
+10
+10%
+1_000_000

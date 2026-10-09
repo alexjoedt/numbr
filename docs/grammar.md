@@ -156,10 +156,15 @@ The UI evaluates a document one line at a time with `Engine::evaluate_line`
 - **Errors.** A parse error, incomplete input or an unknown variable gives an empty result,
   so a half-typed line shows nothing. Other errors show as `Error: ...`, for example
   `1 / 0` shows `Error: Division by zero`.
-- **Integers.** Integer `+`, `-` and `*` wrap around at the `i128` limits. `/` gives a float
-  when the division is not exact: `7 / 2` = `3.5`. Known bug: prefix `-`, `/ -1` and
-  `mod -1` on the smallest `i128` value are not handled and panic the evaluator (a release
-  build wraps the prefix `-` instead).
+- **Integers.** Integer `+`, `-`, `*`, prefix `-`, `/` and `mod` wrap around at the `i128`
+  limits. `/` gives a float when the division is not exact: `7 / 2` = `3.5`. `**` and
+  `Decimal` arithmetic (units, percentages) give an error when the result is out of range.
+  An integer beyond the `Decimal` range (about 7.9e28) used as a unit amount or
+  percentage, or mixed with a `Decimal`, is an error too; mixed with a float it becomes a
+  float. `abs` of the smallest integer wraps like prefix `-`.
+- **Size limits.** Parentheses, call arguments, prefix operators and `**` nest at most 64
+  levels deep, and an expression holds at most 256 operators (binary, prefix, `**`, `in`,
+  `as`, `of`). Beyond that the line is a parse error.
 
 ### `result:` aggregates
 
@@ -191,7 +196,9 @@ The aggregation window is the contiguous block directly above the `result:` line
   `result: sum` lines in a row give the sum, then twice the sum. Under `1`, `5`, `3`,
   `result: min` (`1`) and `result: max` (`5`), `result: avg` is `3`, the mean of
   `1 5 3 1 5`.
-- An empty window is a type error, `result aggregate has no numeric values`.
+- An empty window is a type error, `result aggregate has no numeric values`. A number in
+  the block that `Decimal` cannot hold, such as an integer beyond about 7.9e28 or a NaN, is
+  a type error instead of being skipped.
 
 ```
 10

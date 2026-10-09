@@ -1,0 +1,10 @@
+byteswap32(0x12345678)
+CDAB
+ceil(3.1)
+clz(1)
+cos(0)
+ctz(8)
+diff(2026-07-04, 2026-01-01)
+diff(2026-07-04, 2026-01-01) in weeks
+Division by zero
+e

@@ -1,0 +1,10 @@
+e = 5; e
+Error: 
+evaluation failed
+exp(0)
+expected Float, got {other:?}
+expected Value::Unit, got {other:?}
+floor(3.9)
+foo
+input: {input}: unexpected error {e}
+ln(e)

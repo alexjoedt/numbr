@@ -1,0 +1,1 @@
+modbus::swap::word(0x1234)

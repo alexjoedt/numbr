@@ -1,0 +1,1 @@
+sqrt(modbus::float32(0x42C8, 0x0000))

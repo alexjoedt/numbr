@@ -1,0 +1,10 @@
+a = 10
+b = a * 2
+line1 + line2
+
+5
+7
+result: sum
+result: avg
+result: median
+result: count

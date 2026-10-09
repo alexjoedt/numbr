@@ -1,6 +1,7 @@
 //! Tree-walking interpreter that evaluates a parsed [`Expr`].
 
 use chrono::Duration;
+use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 
 use crate::error::{EvalError, FuncError};
@@ -8,7 +9,7 @@ use crate::functions::FunctionProvider;
 use crate::parser::{BinOp, BitCast, Expr, UnOp};
 use crate::scope::Scope;
 use crate::units;
-use crate::value::Value;
+use crate::value::{int_to_decimal, Value};
 
 /// Evaluates a parsed [`Expr`] against a [`Scope`] and a set of function providers.
 pub struct Interpreter {
@@ -38,10 +39,6 @@ impl Interpreter {
     /// [`EvalError::DivisionByZero`], [`EvalError::UnknownVariable`],
     /// [`EvalError::TypeError`], [`EvalError::UnknownUnit`] or [`EvalError::FuncError`]
     /// (any [`FuncError`] variant), depending on the expression.
-    ///
-    /// # Panics
-    ///
-    /// On arithmetic overflow outside `**`, see [`crate::Engine::evaluate`].
     pub fn eval(&mut self, expr: &Expr) -> Result<Value, EvalError> {
         match expr {
             Expr::Integer(n) => Ok(Value::Integer(*n)),
@@ -51,8 +48,10 @@ impl Interpreter {
 
             Expr::UnitValue { amount, unit } => {
                 let v = self.eval(amount)?;
-                let a = v.to_decimal().ok_or_else(|| {
-                    EvalError::TypeError(format!("unit value must be numeric, got '{v}'"))
+                let a = v.try_decimal().unwrap_or_else(|| {
+                    Err(EvalError::TypeError(format!(
+                        "unit value must be numeric, got '{v}'"
+                    )))
                 })?;
                 Ok(Value::Unit {
                     amount: a,
@@ -112,7 +111,7 @@ impl Interpreter {
                         let pct_num = self.eval(inner)?; // raw number before /100
                         let pct_frac = match &pct_num {
                             Value::Integer(n) => {
-                                Value::Decimal(Decimal::from(*n) / Decimal::ONE_HUNDRED)
+                                Value::Decimal(int_to_decimal(*n)? / Decimal::ONE_HUNDRED)
                             }
                             Value::Decimal(d) => Value::Decimal(d / Decimal::ONE_HUNDRED),
                             Value::Float(f) => Value::Float(f / 100.0),
@@ -159,7 +158,7 @@ impl Interpreter {
                 // Standalone percent → divide by 100 (Decimal for precision)
                 match v {
                     Value::Integer(n) => {
-                        Ok(Value::Decimal(Decimal::from(n) / Decimal::ONE_HUNDRED))
+                        Ok(Value::Decimal(int_to_decimal(n)? / Decimal::ONE_HUNDRED))
                     }
                     Value::Decimal(d) => Ok(Value::Decimal(d / Decimal::ONE_HUNDRED)),
                     Value::Float(f) => Ok(Value::Float(f / 100.0)),
@@ -182,7 +181,7 @@ impl Interpreter {
     fn eval_unary(&self, op: &UnOp, v: Value) -> Result<Value, EvalError> {
         match op {
             UnOp::Neg => match v {
-                Value::Integer(n) => Ok(Value::Integer(-n)),
+                Value::Integer(n) => Ok(Value::Integer(n.wrapping_neg())),
                 Value::Decimal(d) => Ok(Value::Decimal(-d)),
                 Value::Float(f) => Ok(Value::Float(-f)),
                 Value::Unit { amount, unit } => Ok(Value::Unit {
@@ -284,10 +283,10 @@ impl Interpreter {
 
 // ── Arithmetic helpers ────────────────────────────────────────────────────────
 
-fn promote(l: Value, r: Value) -> (Value, Value) {
+fn promote(l: Value, r: Value) -> Result<(Value, Value), EvalError> {
     // Integer + Decimal → Decimal
     // Anything + Float → Float
-    match (l, r) {
+    Ok(match (l, r) {
         (Value::Float(lf), r) => match r.to_f64() {
             Some(rf) => (Value::Float(lf), Value::Float(rf)),
             None => (Value::Float(lf), r),
@@ -296,16 +295,14 @@ fn promote(l: Value, r: Value) -> (Value, Value) {
             Some(lf) => (Value::Float(lf), Value::Float(rf)),
             None => (l, Value::Float(rf)),
         },
-        (l @ Value::Decimal(_), Value::Integer(i)) => {
-            let rd = Decimal::from(i);
-            (l, Value::Decimal(rd))
+        (Value::Decimal(d), Value::Integer(i)) => {
+            (Value::Decimal(d), Value::Decimal(int_to_decimal(i)?))
         }
-        (Value::Integer(i), r @ Value::Decimal(_)) => {
-            let ld = Decimal::from(i);
-            (Value::Decimal(ld), r)
+        (Value::Integer(i), Value::Decimal(d)) => {
+            (Value::Decimal(int_to_decimal(i)?), Value::Decimal(d))
         }
         (l, r) => (l, r),
-    }
+    })
 }
 
 fn add_values(l: Value, r: Value) -> Result<Value, EvalError> {
@@ -332,10 +329,10 @@ fn add_values(l: Value, r: Value) -> Result<Value, EvalError> {
         return add_datetime_duration(*dt, amount, unit);
     }
 
-    let (l, r) = promote(l, r);
+    let (l, r) = promote(l, r)?;
     match (l, r) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a.wrapping_add(b))),
-        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(a + b)),
+        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(checked(a.checked_add(b))?)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
         (Value::Str(a), Value::Str(b)) => Ok(Value::Str(a + &b)),
         // Unit + Unit (same category) — convert RHS to LHS unit and add
@@ -349,13 +346,12 @@ fn add_values(l: Value, r: Value) -> Result<Value, EvalError> {
                 unit: ru,
             },
         ) => {
-            use rust_decimal::prelude::ToPrimitive;
             let ra = ra
                 .to_f64()
                 .ok_or_else(|| EvalError::TypeError("unit amount must be numeric".into()))?;
             let rf = units::convert_f64(ra, &ru, &lu)?;
             Ok(Value::Unit {
-                amount: la + units::f64_to_decimal(rf)?,
+                amount: checked(la.checked_add(units::f64_to_decimal(rf)?))?,
                 unit: lu,
             })
         }
@@ -395,10 +391,10 @@ fn sub_values(l: Value, r: Value) -> Result<Value, EvalError> {
         return Ok(Value::Integer((*dt1 - *dt2).num_seconds().into()));
     }
 
-    let (l, r) = promote(l, r);
+    let (l, r) = promote(l, r)?;
     match (l, r) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a.wrapping_sub(b))),
-        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(a - b)),
+        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(checked(a.checked_sub(b))?)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
         (l, r) => Err(EvalError::TypeError(format!(
             "cannot subtract {r} from {l}"
@@ -457,17 +453,19 @@ fn add_datetime_duration(
 }
 
 fn mul_values(l: Value, r: Value) -> Result<Value, EvalError> {
-    let (l, r) = promote(l, r);
+    let (l, r) = promote(l, r)?;
     match (l, r) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a.wrapping_mul(b))),
-        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(a * b)),
+        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(checked(a.checked_mul(b))?)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
         (Value::Unit { amount, unit }, scalar) | (scalar, Value::Unit { amount, unit }) => {
-            let scalar = scalar.to_decimal().ok_or_else(|| {
-                EvalError::TypeError("unit multiplication requires a numeric scalar".into())
+            let scalar = scalar.try_decimal().unwrap_or_else(|| {
+                Err(EvalError::TypeError(
+                    "unit multiplication requires a numeric scalar".into(),
+                ))
             })?;
             Ok(Value::Unit {
-                amount: amount * scalar,
+                amount: checked(amount.checked_mul(scalar))?,
                 unit,
             })
         }
@@ -483,18 +481,25 @@ fn div_values(l: Value, r: Value) -> Result<Value, EvalError> {
         Value::Float(f) if *f == 0.0 => return Err(EvalError::DivisionByZero),
         _ => {}
     }
-    let (l, r) = promote(l, r);
+    let (l, r) = promote(l, r)?;
     match (l, r) {
-        (Value::Integer(a), Value::Integer(b)) if a % b == 0 => Ok(Value::Integer(a / b)),
+        (Value::Integer(a), Value::Integer(b)) if a.wrapping_rem(b) == 0 => {
+            Ok(Value::Integer(a.wrapping_div(b)))
+        }
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Float(a as f64 / b as f64)),
-        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(a / b)),
+        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(checked(a.checked_div(b))?)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
         (Value::Unit { amount, unit }, scalar) => {
-            let scalar = scalar.to_decimal().ok_or_else(|| {
-                EvalError::TypeError("unit division requires a numeric scalar".into())
+            let scalar = scalar.try_decimal().unwrap_or_else(|| {
+                Err(EvalError::TypeError(
+                    "unit division requires a numeric scalar".into(),
+                ))
             })?;
+            if scalar.is_zero() {
+                return Err(EvalError::DivisionByZero);
+            }
             Ok(Value::Unit {
-                amount: amount / scalar,
+                amount: checked(amount.checked_div(scalar))?,
                 unit,
             })
         }
@@ -509,10 +514,10 @@ fn rem_values(l: Value, r: Value) -> Result<Value, EvalError> {
         Value::Float(f) if *f == 0.0 => return Err(EvalError::DivisionByZero),
         _ => {}
     }
-    let (l, r) = promote(l, r);
+    let (l, r) = promote(l, r)?;
     match (l, r) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a % b)),
-        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(a % b)),
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a.wrapping_rem(b))),
+        (Value::Decimal(a), Value::Decimal(b)) => Ok(Value::Decimal(checked(a.checked_rem(b))?)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a % b)),
         (l, r) => Err(EvalError::TypeError(format!("cannot mod {l} by {r}"))),
     }
@@ -574,9 +579,11 @@ fn shift(
         .ok_or_else(|| EvalError::TypeError(format!("shift count out of range for {sym}")))
 }
 
-fn decimal_to_f64(value: &Decimal, label: &str) -> Result<f64, EvalError> {
-    use rust_decimal::prelude::ToPrimitive;
+fn checked(result: Option<Decimal>) -> Result<Decimal, EvalError> {
+    result.ok_or_else(|| EvalError::TypeError("Decimal result is out of range".into()))
+}
 
+fn decimal_to_f64(value: &Decimal, label: &str) -> Result<f64, EvalError> {
     value
         .to_f64()
         .filter(|value| value.is_finite())

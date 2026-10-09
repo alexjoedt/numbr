@@ -1,0 +1,28 @@
+[package]
+name = "numbr-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.numbr-core]
+path = "../crates/core"
+
+[[bin]]
+name = "evaluate"
+path = "fuzz_targets/evaluate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "evaluate_lines"
+path = "fuzz_targets/evaluate_lines.rs"
+test = false
+doc = false
+bench = false

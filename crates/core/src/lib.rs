@@ -1473,4 +1473,117 @@ mod tests {
         );
         assert!(run(&["", "result: sum"])[1].starts_with("Error: "));
     }
+
+    #[test]
+    fn test_table_overflow_does_not_panic() {
+        let min = "-170141183460469231731687303715884105728";
+        let wrap = "(170141183460469231731687303715884105727 + 1)";
+        let cases = [
+            // fuzz: integer beyond the Decimal range as a unit amount
+            ("33333333333333333333333333333333333331g+1", "type error"),
+            ("100000000000000000000000000000 km", "type error"),
+            ("100000000000000000000000000000%", "type error"),
+            ("2 km + 100000000000000000000000000000%", "type error"),
+            ("79228162514264337593543950335 km * 10", "type error"),
+            (
+                "79228162514264337593543950335 km + 79228162514264337593543950335 km",
+                "type error",
+            ),
+            ("10 km / 0.0000000000000000000000000001", "type error"),
+            (
+                "10 km / 0.0000000000000000000000000000001",
+                "division by zero",
+            ),
+            ("5% * 79228162514264337593543950335 * 100", "type error"),
+            (&format!("-{wrap}"), min),
+            (&format!("{wrap} / -1"), min),
+            (&format!("{wrap} mod -1"), "0"),
+            (&format!("abs{wrap}"), min),
+            ("5% * 100000000000000000000000000000", "type error"),
+            ("100000000000000000000000000000 + 5%", "type error"),
+            ("100000000000000000000000000000 - 5%", "type error"),
+        ];
+        for (input, expected) in cases {
+            let got = match Engine::new().evaluate(input) {
+                Ok(v) => v.to_string(),
+                Err(EvalError::TypeError(_)) => "type error".to_owned(),
+                Err(EvalError::DivisionByZero) => "division by zero".to_owned(),
+                Err(e) => panic!("input: {input}: unexpected error {e}"),
+            };
+            assert_eq!(got, expected, "input: {input}");
+        }
+
+        for input in [
+            "100000000000000000000000000000 km",
+            "2 km * 100000000000000000000000000000",
+            "5% * 100000000000000000000000000000",
+        ] {
+            assert_eq!(
+                Engine::new().evaluate(input),
+                Err(EvalError::TypeError(
+                    "integer is out of Decimal range".into()
+                )),
+                "input: {input}"
+            );
+        }
+
+        let mut e = Engine::new();
+        for line in [
+            "79228162514264337593543950335",
+            "79228162514264337593543950335",
+        ] {
+            e.evaluate_line(line);
+        }
+        assert!(e.evaluate("result: sum").is_err());
+        for aggregate in ["avg", "median"] {
+            assert_eq!(
+                e.evaluate(&format!("result: {aggregate}"))
+                    .unwrap()
+                    .to_string(),
+                "79228162514264337593543950335"
+            );
+        }
+    }
+
+    #[test]
+    fn test_result_aggregate_rejects_out_of_range_integer() {
+        let mut e = Engine::new();
+        e.evaluate_line("100000000000000000000000000000");
+        e.evaluate_line("5");
+        for aggregate in ["sum", "avg", "count"] {
+            assert_eq!(
+                e.evaluate(&format!("result: {aggregate}")),
+                Err(EvalError::TypeError(
+                    "integer is out of Decimal range".into()
+                )),
+                "aggregate: {aggregate}"
+            );
+        }
+        assert_eq!(e.evaluate("result: su"), Err(EvalError::Incomplete));
+    }
+
+    #[test]
+    fn test_nesting_limit_is_a_parse_error() {
+        let deep = [
+            "(".repeat(100_000) + "1",
+            "f(".repeat(100_000),
+            "-".repeat(100_000) + "1",
+            vec!["2"; 100_000].join("**"),
+            vec!["1"; 100_000].join("+"),
+            "1".to_owned() + &" in hex".repeat(100_000),
+        ];
+        for input in deep {
+            assert!(
+                matches!(
+                    Engine::new().evaluate(&input),
+                    Err(EvalError::ParseError { .. })
+                ),
+                "input: {}",
+                &input[..12]
+            );
+        }
+        let nested = "(".repeat(64) + "1" + &")".repeat(64);
+        assert_eq!(eval(&nested), Value::Integer(1));
+        assert_eq!(eval(&vec!["1"; 200].join("+")), Value::Integer(200));
+    }
 }

@@ -76,21 +76,12 @@ impl Engine {
     /// [`EvalError::DivisionByZero`], [`EvalError::UnknownVariable`],
     /// [`EvalError::TypeError`], [`EvalError::UnknownUnit`], [`EvalError::FuncError`].
     ///
-    /// # Panics
-    ///
-    /// Overflow outside the `**` path is not turned into an error:
-    ///
-    /// - An integer beyond the `Decimal` range (about 7.9e28) panics when it is promoted
-    ///   to `Decimal`: as a unit amount, a percentage or next to a `Decimal` operand,
-    ///   e.g. `100000000000000000000000000000 km` or `100000000000000000000000000000%`.
-    /// - `Decimal` arithmetic is unchecked, so a result beyond its range panics, e.g.
-    ///   `79228162514264337593543950335 km * 10` or `10 km / 0.0000000000000000000000000001`.
-    /// - Prefix `-`, `/ -1` and `mod -1` on `i128::MIN` panic (prefix `-` wraps in
-    ///   release builds).
-    ///
-    /// Integer `+`, `-` and `*` never panic: they wrap silently on `i128` overflow, so
-    /// `170141183460469231731687303715884105727 + 1` gives `i128::MIN`. Only `**`
-    /// checks and returns [`EvalError::TypeError`] on overflow.
+    /// Overflow does not panic. Integer `+`, `-`, `*`, prefix `-`, `/` and `mod` wrap
+    /// at the `i128` limits, so `170141183460469231731687303715884105727 + 1` gives
+    /// `i128::MIN`. `**`, `Decimal` arithmetic and integers beyond the `Decimal` range
+    /// (about 7.9e28) used as a unit amount, a percentage, mixed with a `Decimal` or in a
+    /// `result:` block return [`EvalError::TypeError`]. More than 64 nesting levels or 256
+    /// operators in one expression are an [`EvalError::ParseError`].
     ///
     /// # Examples
     ///
@@ -120,21 +111,15 @@ impl Engine {
 
     fn evaluate_result_command(&self, command: &str) -> Result<Value, EvalError> {
         let command = command.to_ascii_lowercase();
-        let numbers = contiguous_result_numbers(self.interpreter.scope.lines());
+        let numbers = || contiguous_result_numbers(self.interpreter.scope.lines());
 
         match command.as_str() {
-            "sum" => aggregate_numbers(&numbers, |numbers| numbers.iter().sum()),
-            "average" | "avg" | "mean" => aggregate_numbers(&numbers, |numbers| {
-                numbers.iter().sum::<Decimal>() / Decimal::from(numbers.len())
-            }),
-            "median" => aggregate_numbers(&numbers, median),
-            "min" => aggregate_numbers(&numbers, |numbers| {
-                *numbers.iter().min().expect("numbers is non-empty")
-            }),
-            "max" => aggregate_numbers(&numbers, |numbers| {
-                *numbers.iter().max().expect("numbers is non-empty")
-            }),
-            "count" => Ok(Value::Integer(numbers.len() as i128)),
+            "sum" => aggregate_numbers(&numbers()?, sum),
+            "average" | "avg" | "mean" => aggregate_numbers(&numbers()?, mean),
+            "median" => aggregate_numbers(&numbers()?, median),
+            "min" => aggregate_numbers(&numbers()?, |numbers| numbers.iter().min().copied()),
+            "max" => aggregate_numbers(&numbers()?, |numbers| numbers.iter().max().copied()),
+            "count" => Ok(Value::Integer(numbers()?.len() as i128)),
             _ => Err(EvalError::Incomplete),
         }
     }
@@ -144,10 +129,6 @@ impl Engine {
     /// Errors are not returned but folded into the value: a parse error, an incomplete
     /// line or an unknown variable gives an empty `Value::Str` (the line is still being
     /// typed), any other error gives `Value::Err` with the error message.
-    ///
-    /// # Panics
-    ///
-    /// On arithmetic overflow outside `**`, see [`Engine::evaluate`].
     ///
     /// # Examples
     ///
@@ -177,21 +158,21 @@ impl Engine {
     }
 }
 
-fn contiguous_result_numbers(lines: &[Value]) -> Vec<Decimal> {
-    let mut numbers: Vec<Decimal> = lines
+fn contiguous_result_numbers(lines: &[Value]) -> Result<Vec<Decimal>, EvalError> {
+    let mut numbers = lines
         .iter()
         .rev()
         .skip_while(|value| matches!(value, Value::Str(text) if text.is_empty()))
         .take_while(|value| !matches!(value, Value::Str(text) if text.is_empty()))
-        .filter_map(Value::to_decimal)
-        .collect();
+        .filter_map(Value::try_decimal)
+        .collect::<Result<Vec<_>, _>>()?;
     numbers.reverse();
-    numbers
+    Ok(numbers)
 }
 
 fn aggregate_numbers(
     numbers: &[Decimal],
-    f: impl FnOnce(&[Decimal]) -> Decimal,
+    f: impl FnOnce(&[Decimal]) -> Option<Decimal>,
 ) -> Result<Value, EvalError> {
     if numbers.is_empty() {
         return Err(EvalError::TypeError(
@@ -199,17 +180,42 @@ fn aggregate_numbers(
         ));
     }
 
-    Ok(decimal_value(f(numbers)))
+    f(numbers)
+        .map(decimal_value)
+        .ok_or_else(|| EvalError::TypeError("result aggregate is out of range".to_owned()))
 }
 
-fn median(numbers: &[Decimal]) -> Decimal {
+fn sum(numbers: &[Decimal]) -> Option<Decimal> {
+    numbers
+        .iter()
+        .try_fold(Decimal::ZERO, |acc, n| acc.checked_add(*n))
+}
+
+fn mean(numbers: &[Decimal]) -> Option<Decimal> {
+    let len = Decimal::from(numbers.len());
+    sum(numbers)
+        .and_then(|total| total.checked_div(len))
+        .or_else(|| {
+            numbers
+                .iter()
+                .zip(1u64..)
+                .try_fold(Decimal::ZERO, |mean, (n, k)| {
+                    mean.checked_add(n.checked_sub(mean)?.checked_div(Decimal::from(k))?)
+                })
+        })
+}
+
+fn median(numbers: &[Decimal]) -> Option<Decimal> {
     let mut sorted = numbers.to_vec();
     sorted.sort();
     let mid = sorted.len() / 2;
     if sorted.len() % 2 == 1 {
-        sorted[mid]
+        Some(sorted[mid])
     } else {
-        (sorted[mid - 1] + sorted[mid]) / Decimal::from(2)
+        let (low, high) = (sorted[mid - 1], sorted[mid]);
+        low.checked_add(high)
+            .map(|total| total / Decimal::TWO)
+            .or_else(|| low.checked_add((high - low) / Decimal::TWO))
     }
 }
 
