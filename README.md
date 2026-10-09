@@ -44,9 +44,16 @@ sudo pacman -S wayland libxkbcommon mesa                      # Arch
 
 ### Prebuilt binary
 
-Download the `x86_64-unknown-linux-gnu` tarball from the
-[releases page](https://github.com/alexjoedt/numbr/releases), extract it, and run
-`numbr` from anywhere on your `$PATH`.
+Download the tarball for your architecture (`x86_64-unknown-linux-gnu` or
+`aarch64-unknown-linux-gnu`) and `SHA256SUMS` from the
+[releases page](https://github.com/alexjoedt/numbr/releases). Verify, extract, and put
+`numbr` anywhere on your `$PATH`:
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+gh attestation verify numbr-<tag>-<target>.tar.gz --repo alexjoedt/numbr  # optional, build provenance
+tar -xzf numbr-<tag>-<target>.tar.gz
+```
 
 ### From source
 
