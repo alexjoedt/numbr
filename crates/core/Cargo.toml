@@ -20,6 +20,3 @@ thiserror    = { workspace = true }
 rust_decimal = { workspace = true }
 logos        = { workspace = true }
 chrono       = { workspace = true }
-
-[dev-dependencies]
-insta = { workspace = true }
