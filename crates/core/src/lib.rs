@@ -1285,4 +1285,164 @@ mod tests {
             assert_eq!(result.to_string(), expected, "input: {input}");
         }
     }
+
+    #[test]
+    fn test_table_grammar_doc() {
+        let cases = [
+            ("x = 2; x * 3", "6"),
+            ("x = 255 in hex", "0xFF"),
+            ("300 as uint8 in hex", "0x2C"),
+            ("5% of 200", "10.00"),
+            ("10 - 4 - 3", "3"),
+            ("1 | 2 * 3", "9"),
+            ("2 ** 3 ** 2", "512"),
+            ("-~0", "1"),
+            ("2 * 3 km", "6 km"),
+            ("(2 + 3) * 4", "20"),
+            ("2 + 3 * 4 in hex", "0xE"),
+            ("1 mile in km", "1.609344 km"),
+            ("3 km in m", "3000 m"),
+            ("255 as int8", "-1"),
+            ("1 | (2 * 3)", "7"),
+            ("1 << 4 + 1", "17"),
+            ("-2 ** 2", "4"),
+            ("-(2 ** 2)", "-4"),
+            ("-1 celsius in K", "272.15 K"),
+            ("2 + 3 km", "type error"),
+            ("(2 + 3) km", "5 km"),
+            ("2 ** 3 km", "type error"),
+            ("10%", "0.10"),
+            ("2 * 3 %", "0.06"),
+            ("100 * 10%", "10.00"),
+            ("100 + 10%", "110.00"),
+            ("100 - 10%", "90.00"),
+            ("5 of 200", "parse error"),
+            ("-5% of 200", "parse error"),
+            ("50 + 10% of 200", "parse error"),
+            ("50 + (10% of 200)", "70.00"),
+            ("10% of 50 + 5", "5.50"),
+            ("a = b = 1", "parse error"),
+            ("42", "42"),
+            ("1_000_000", "1000000"),
+            ("99999999999999999999999999999999999999999", "parse error"),
+            ("0xFF", "255"),
+            ("0b1010", "10"),
+            ("0o17", "15"),
+            ("0xFF_FF", "65535"),
+            ("0X1f", "31"),
+            ("1.5", "1.5"),
+            ("1_000.5", "1000.5"),
+            ("1.5e3", "1500"),
+            ("2e3", "2000"),
+            ("1.5E-2", "0.015"),
+            (".5", "parse error"),
+            ("1.", "parse error"),
+            ("1,5", "parse error"),
+            (r#""abc""#, "abc"),
+            (r#""a\"b""#, r#"a\"b"#),
+            (r#""a" + "b""#, "ab"),
+            ("2026-07-04", "2026-07-04"),
+            ("2026-7-4", "2026-07-04"),
+            ("2026-02-30", "parse error"),
+            ("2026 - 07 - 04", "2015"),
+            ("7 mod 4", "3"),
+            ("7 mod 3", "1"),
+            ("7 % 3", "parse error"),
+            ("1000-2-3", "1000-02-03"),
+            ("2026-1-1 + 1", "type error"),
+            (r#""a#b""#, "a#b"),
+            ("1 + 2 # note", "3"),
+            ("pi", "3.141592654"),
+            ("e", "2.718281828"),
+            ("phi", "1.618033989"),
+            ("CDAB", "CDAB"),
+            ("e = 5; e", "2.718281828"),
+            ("foo", "unknown variable"),
+            ("2 foo", "parse error"),
+            ("2 in", "parse error"),
+            ("2 inch", "2 inch"),
+            ("sqrt 16", "parse error"),
+            ("sqrt(16; 25)", "5"),
+            ("modbus::float32(0x4128, 0x0000)", "10.5"),
+            ("modbus_float32(0x4128, 0x0000)", "10.5"),
+            ("modbus::int32(0,1)", "1"),
+            ("1 / 0", "division by zero"),
+            (
+                "170141183460469231731687303715884105727 + 1",
+                "-170141183460469231731687303715884105728",
+            ),
+            ("7 / 2", "3.5"),
+        ];
+        for (input, expected) in cases {
+            let got = match Engine::new().evaluate(input) {
+                Ok(v) => v.to_string(),
+                Err(EvalError::ParseError { .. }) => "parse error".to_owned(),
+                Err(EvalError::TypeError(_)) => "type error".to_owned(),
+                Err(EvalError::UnknownVariable(_)) => "unknown variable".to_owned(),
+                Err(EvalError::DivisionByZero) => "division by zero".to_owned(),
+                Err(e) => panic!("input: {input}: unexpected error {e}"),
+            };
+            assert_eq!(got, expected, "input: {input}");
+        }
+
+        let mut comma = Engine::new().with_decimal_separator(DecimalSeparator::Comma);
+        assert_eq!(comma.evaluate("1,5").unwrap().to_string(), "1.5");
+    }
+
+    #[test]
+    fn test_grammar_doc_evaluation_model() {
+        fn run(lines: &[&str]) -> Vec<String> {
+            let mut e = Engine::new();
+            lines
+                .iter()
+                .map(|l| e.evaluate_line(l).to_string())
+                .collect()
+        }
+
+        assert_eq!(
+            run(&[
+                "price = 42",
+                "qty = 3",
+                "price * qty",
+                "line3 + 1",
+                "# comment",
+                "line5"
+            ]),
+            ["42", "3", "126", "127", "", ""]
+        );
+        assert_eq!(run(&["x = 5", "y = x * 2", "x = 1", "y"])[3], "10");
+        let errors = run(&["foo", "1 +", "1 / 0"]);
+        assert_eq!(errors[..2], ["", ""]);
+        assert!(errors[2].starts_with("Error: "));
+        assert_eq!(
+            run(&["10", "20", "", "1", "2", "3", "result: sum", "result: sum"])[6..],
+            ["6", "12"]
+        );
+        assert_eq!(run(&["10", "20", "# note", "30", "result: sum"])[4], "30");
+        assert_eq!(run(&["10", "foo", "30", "result: sum"])[3], "30");
+        assert_eq!(run(&["10", "1 / 0", "30", "result: count"])[3], "2");
+        assert_eq!(
+            run(&[
+                "10",
+                "2 km",
+                r#""text""#,
+                "255 in hex",
+                "30",
+                "result: count"
+            ])[5],
+            "2"
+        );
+        assert_eq!(run(&["10", "20", "", "", "result: sum"])[4], "30");
+        assert_eq!(
+            run(&["1", "2", "3", "4", "result: median", "result: MEAN"])[4..],
+            ["2.5", "2.5"]
+        );
+        assert_eq!(run(&["1", "2", "result:", "result: total"])[2..], ["", ""]);
+        assert_eq!(run(&["r = 7", "r + 0"])[1], "7");
+        assert_eq!(
+            run(&["1", "5", "3", "result: min", "result: max", "result: avg"])[3..],
+            ["1", "5", "3"]
+        );
+        assert!(run(&["", "result: sum"])[1].starts_with("Error: "));
+    }
 }

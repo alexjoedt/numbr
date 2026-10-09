@@ -52,7 +52,10 @@ cargo test -p numbr-core
 - Follow standard Rust idioms and the Rust API Guidelines.
 - Use `rust_decimal::Decimal` for all numeric values — avoid `f32`/`f64` for calculator logic.
 - Errors in `core` use `thiserror`-derived types (`EvalError`, `FuncError`).
-- New language features (functions, builtins, operators) belong in `crates/core`.
+- New language features (functions, builtins, operators) belong in `crates/core`. The
+  grammar, precedence and evaluation model are documented in `docs/grammar.md`; update it and
+  its examples in `test_table_grammar_doc` and `test_grammar_doc_evaluation_model` when you
+  change them.
 - UI concerns belong in `crates/ui`; keep `core` free of GUI dependencies.
 - Add tests for any new parser or interpreter behaviour to the `mod tests` block in
   `crates/core/src/lib.rs`. Table-driven `assert_eq!` over a `[(input, expected)]` array is
