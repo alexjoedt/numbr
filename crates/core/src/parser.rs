@@ -1,3 +1,5 @@
+//! Pratt parser and the expression AST.
+
 use crate::error::EvalError;
 use crate::lexer::Token;
 use crate::units;
@@ -5,7 +7,7 @@ use logos::Logos as _;
 
 // ── AST ──────────────────────────────────────────────────────────────────────
 
-/// Expression tree produced by [`parse`].
+/// Expression tree produced by [`parse_with`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     /// Integer literal (decimal, hex, binary or octal).
@@ -143,15 +145,6 @@ pub enum DecimalSeparator {
 // ── Pratt parser ─────────────────────────────────────────────────────────────
 
 type TokenList<'src> = Vec<(Token<'src>, std::ops::Range<usize>)>;
-
-/// Parse `input` with `.` as the decimal separator.
-///
-/// # Errors
-///
-/// [`EvalError::ParseError`] for an unexpected character, token or end of input.
-pub fn parse(input: &str) -> Result<Expr, EvalError> {
-    parse_with(input, DecimalSeparator::Point)
-}
 
 /// Parse `input` with the given decimal separator.
 ///

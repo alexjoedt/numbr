@@ -1,3 +1,5 @@
+//! Unit tables and conversions (length, mass, temperature, time, ...).
+
 use crate::error::EvalError;
 use crate::value::Value;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
@@ -210,20 +212,6 @@ pub fn time_unit_to_days(unit: &str) -> Option<i64> {
         "week" | "weeks" => 7,
         "month" | "months" => 30,
         "year" | "years" => 365,
-        _ => return None,
-    })
-}
-
-/// Returns whole seconds per time unit for datetime arithmetic.
-pub fn time_unit_to_seconds(unit: &str) -> Option<i64> {
-    Some(match unit {
-        "s" | "sec" | "second" | "seconds" => 1,
-        "min" | "minute" | "minutes" => 60,
-        "h" | "hour" | "hours" => 3_600,
-        "day" | "days" => 86_400,
-        "week" | "weeks" => 604_800,
-        "month" | "months" => 2_629_800,
-        "year" | "years" => 31_557_600,
         _ => return None,
     })
 }
