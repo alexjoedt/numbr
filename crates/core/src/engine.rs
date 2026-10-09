@@ -15,7 +15,17 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Create a new engine with built-in functions only.
+    /// Create a new engine with the built-in and `modbus::` functions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use numbr_core::{Engine, Value};
+    ///
+    /// let mut engine = Engine::new();
+    /// assert_eq!(engine.evaluate("sqrt(16)").unwrap(), Value::Float(4.0));
+    /// assert!(engine.scope().lines().is_empty());
+    /// ```
     pub fn new() -> Self {
         Self::with_providers(vec![Box::new(BuiltinFunctions), Box::new(ModbusFunctions)])
     }
@@ -53,8 +63,38 @@ impl Engine {
     }
 
     /// Evaluate a single line. Returns the result value or an error.
-    /// Malformed and out-of-range input yields `Err(EvalError)`; untrusted
-    /// input does not panic.
+    ///
+    /// Comments (`# ...`) are stripped first. An empty line, or a prefix of `result`,
+    /// yields an empty `Value::Str`. `result: <aggregate>` aggregates the numeric results
+    /// recorded by [`Engine::evaluate_line`] above it. Assignments update the scope, but
+    /// unlike [`Engine::evaluate_line`] the result is not recorded for `lineN`.
+    ///
+    /// # Errors
+    ///
+    /// [`EvalError::ParseError`] for invalid syntax, [`EvalError::Incomplete`] for an
+    /// unknown `result:` aggregate, and any error of [`Interpreter::eval`]:
+    /// [`EvalError::DivisionByZero`], [`EvalError::UnknownVariable`],
+    /// [`EvalError::TypeError`], [`EvalError::UnknownUnit`], [`EvalError::FuncError`].
+    ///
+    /// # Panics
+    ///
+    /// On arithmetic overflow outside `**`: an integer beyond the `Decimal` range used
+    /// as a unit amount or percentage (`100000000000000000000000000000 km`), a `Decimal`
+    /// result beyond its range (`10 km / 0.0000000000000000000000000001`), and prefix
+    /// `-`, `/ -1` or `mod -1` on `i128::MIN`. Integer `+`, `-` and `*` wrap instead.
+    /// Full list in [`Interpreter::eval`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use numbr_core::{Engine, EvalError, Value};
+    ///
+    /// let mut engine = Engine::new();
+    /// assert_eq!(engine.evaluate("x = 6 * 7").unwrap(), Value::Integer(42));
+    /// assert_eq!(engine.evaluate("x / 2  # half").unwrap(), Value::Integer(21));
+    /// assert_eq!(engine.evaluate("1 / 0"), Err(EvalError::DivisionByZero));
+    /// assert!(matches!(engine.evaluate("2 +"), Err(EvalError::ParseError { .. })));
+    /// ```
     pub fn evaluate(&mut self, input: &str) -> Result<Value, EvalError> {
         let trimmed = strip_comment(input).trim();
         if trimmed.is_empty() {
@@ -92,6 +132,31 @@ impl Engine {
     }
 
     /// Evaluate a line and record its result in the scope for `lineN` references.
+    ///
+    /// Errors are not returned but folded into the value: a parse error, an incomplete
+    /// line or an unknown variable gives an empty `Value::Str` (the line is still being
+    /// typed), any other error gives `Value::Err` with the error message.
+    ///
+    /// # Panics
+    ///
+    /// On arithmetic overflow outside `**`: an integer beyond the `Decimal` range used
+    /// as a unit amount or percentage (`100000000000000000000000000000 km`), a `Decimal`
+    /// result beyond its range (`10 km / 0.0000000000000000000000000001`), and prefix
+    /// `-`, `/ -1` or `mod -1` on `i128::MIN`. Integer `+`, `-` and `*` wrap instead.
+    /// Full list in [`Interpreter::eval`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use numbr_core::{Engine, Value};
+    ///
+    /// let mut engine = Engine::new();
+    /// assert_eq!(engine.evaluate_line("10"), Value::Integer(10));
+    /// assert_eq!(engine.evaluate_line("line1 * 2"), Value::Integer(20));
+    /// assert_eq!(engine.evaluate_line("2 +"), Value::Str(String::new()));
+    /// assert_eq!(engine.evaluate_line("1 / 0"), Value::Err("Division by zero".into()));
+    /// assert_eq!(engine.scope().line_count(), 4);
+    /// ```
     pub fn evaluate_line(&mut self, input: &str) -> Value {
         let result = match self.evaluate(input) {
             Ok(v) => v,
@@ -153,6 +218,7 @@ fn decimal_value(value: Decimal) -> Value {
     Value::Decimal(value.normalize())
 }
 
+/// Cut `input` at the first `#` outside a string literal.
 pub fn strip_comment(input: &str) -> &str {
     let mut escaped = false;
     let mut in_string = false;

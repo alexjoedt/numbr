@@ -1,3 +1,5 @@
+//! numbr binary: sets up logging (`--verbose` or `--debug` for debug logs, `RUST_LOG`
+//! overrides) and starts the GUI from `numbr-ui`. Holds no logic of its own.
 #![forbid(unsafe_code)]
 
 fn main() {

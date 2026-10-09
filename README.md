@@ -11,7 +11,7 @@ Inspired by [Numi](https://numi.app), with a focus on developer workflows.
 10 km in miles                   6.21371 miles
 sqrt(2) * 3                      4.242640687
 0xFF in binary                   0b11111111
-255 as int16                     -1
+255 as int8                      -1
 price = 42; price * 3            126
 modbus::float32(0x4128, 0x0000)  10.5
 today + 2 weeks                  2026-07-18

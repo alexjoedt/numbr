@@ -10,14 +10,17 @@ pub struct Scope {
 }
 
 impl Scope {
+    /// Create an empty scope.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Bind `name` to `value`, replacing any previous binding.
     pub fn set_var(&mut self, name: &str, value: Value) {
         self.vars.insert(name.to_owned(), value);
     }
 
+    /// Value bound to `name`, if any. Does not resolve `lineN`; see [`Scope::resolve`].
     pub fn get_var(&self, name: &str) -> Option<&Value> {
         self.vars.get(name)
     }
@@ -33,11 +36,12 @@ impl Scope {
         &self.lines
     }
 
-    /// `line1` … `lineN`
+    /// Result of line `n` (1-based), as referenced by `line1` … `lineN`.
     pub fn get_line(&self, n: usize) -> Option<&Value> {
         self.lines.get(n.saturating_sub(1))
     }
 
+    /// Number of recorded line results.
     pub fn line_count(&self) -> usize {
         self.lines.len()
     }

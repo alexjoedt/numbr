@@ -3,6 +3,7 @@ use crate::functions::FunctionProvider;
 use crate::value::Value;
 use rust_decimal::prelude::*;
 
+/// Provides the built-in math, bit and date functions (`sqrt`, `popcount`, `diff`, ...).
 pub struct BuiltinFunctions;
 
 impl FunctionProvider for BuiltinFunctions {

@@ -8,12 +8,15 @@ use crate::scope::Scope;
 use crate::units;
 use crate::value::Value;
 
+/// Evaluates a parsed [`Expr`] against a [`Scope`] and a set of function providers.
 pub struct Interpreter {
+    /// Variables and line results visible to evaluated expressions.
     pub scope: Scope,
     providers: Vec<Box<dyn FunctionProvider>>,
 }
 
 impl Interpreter {
+    /// Create an interpreter with an empty scope.
     pub fn new(providers: Vec<Box<dyn FunctionProvider>>) -> Self {
         Self {
             scope: Scope::new(),
@@ -27,6 +30,28 @@ impl Interpreter {
     }
 
     /// Evaluate an already-parsed expression.
+    ///
+    /// # Errors
+    ///
+    /// [`EvalError::DivisionByZero`], [`EvalError::UnknownVariable`],
+    /// [`EvalError::TypeError`], [`EvalError::UnknownUnit`] or [`EvalError::FuncError`]
+    /// (any [`FuncError`] variant), depending on the expression.
+    ///
+    /// # Panics
+    ///
+    /// Overflow outside the `**` path is not turned into an error:
+    ///
+    /// - An integer beyond the `Decimal` range (about 7.9e28) panics when it is promoted
+    ///   to `Decimal`: as a unit amount, a percentage or next to a `Decimal` operand,
+    ///   e.g. `100000000000000000000000000000 km` or `100000000000000000000000000000%`.
+    /// - `Decimal` arithmetic is unchecked, so a result beyond its range panics, e.g.
+    ///   `79228162514264337593543950335 km * 10` or `10 km / 0.0000000000000000000000000001`.
+    /// - Prefix `-`, `/ -1` and `mod -1` on `i128::MIN` panic (prefix `-` wraps in
+    ///   release builds).
+    ///
+    /// Integer `+`, `-` and `*` never panic: they wrap silently on `i128` overflow, so
+    /// `170141183460469231731687303715884105727 + 1` gives `i128::MIN`. Only `**`
+    /// checks and returns [`EvalError::TypeError`] on overflow.
     pub fn eval(&mut self, expr: &Expr) -> Result<Value, EvalError> {
         match expr {
             Expr::Integer(n) => Ok(Value::Integer(*n)),
