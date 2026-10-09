@@ -363,10 +363,10 @@ mod tests {
         assert_eq!(eval("abs(-5)"), Value::Integer(5));
     }
 
-    // ── Snapshot tests ────────────────────────────────────────────────────
+    // ── Table-driven tests ────────────────────────────────────────────────
 
     #[test]
-    fn test_snapshot_developer_conversions() {
+    fn test_table_developer_conversions() {
         let cases = [
             ("0xFF as uint8", "255"),
             ("0xFF as int8", "-1"),
@@ -793,7 +793,7 @@ mod tests {
     }
 
     #[test]
-    fn test_modbus_snapshot() {
+    fn test_table_modbus() {
         let cases = [
             ("modbus::int32(0x0000, 0x0001)", "1"),
             ("modbus::uint32(0xFFFF, 0xFFFF)", "4294967295"),
@@ -1229,10 +1229,10 @@ mod tests {
         assert!(matches!(result, Err(EvalError::DivisionByZero)));
     }
 
-    // ── Snapshot coverage across all milestones ───────────────────────────
+    // ── Table-driven coverage across all milestones ───────────────────────
 
     #[test]
-    fn test_snapshot_arithmetic() {
+    fn test_table_arithmetic() {
         let cases = [
             ("2 + 3", "5"),
             ("10 - 4", "6"),
@@ -1251,7 +1251,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_number_systems() {
+    fn test_table_number_systems() {
         let cases = [
             ("0xFF", "255"),
             ("0b1010", "10"),
@@ -1273,7 +1273,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_units() {
+    fn test_table_units() {
         // We test the display string; exact amounts already covered by dedicated tests.
         let cases = [
             ("1 km in meters", "1000 meters"),

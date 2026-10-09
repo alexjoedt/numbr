@@ -35,9 +35,6 @@ cargo test
 
 # Run tests for a specific crate
 cargo test -p numbr-core
-
-# Update insta snapshots
-cargo insta review
 ```
 
 ## Key Dependencies
@@ -49,7 +46,6 @@ cargo insta review
 | `chrono` | Date/time support |
 | `iced` | GUI framework (Wayland / multi-window) |
 | `thiserror` | Error type derivation |
-| `insta` | Snapshot testing |
 
 ## Coding Guidelines
 
@@ -58,5 +54,7 @@ cargo insta review
 - Errors in `core` use `thiserror`-derived types (`EvalError`, `FuncError`).
 - New language features (functions, builtins, operators) belong in `crates/core`.
 - UI concerns belong in `crates/ui`; keep `core` free of GUI dependencies.
-- Write snapshot tests with `insta` for any new parser or interpreter behaviour.
+- Add tests for any new parser or interpreter behaviour to the `mod tests` block in
+  `crates/core/src/lib.rs`. Table-driven `assert_eq!` over a `[(input, expected)]` array is
+  the established pattern — see `test_table_arithmetic`.
 - Keep `crates/app` minimal — it should only wire up `core`, `ui`, and `providers`.

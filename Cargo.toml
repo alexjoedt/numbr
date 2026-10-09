@@ -23,7 +23,6 @@ categories   = ["command-line-utilities", "mathematics"]
 thiserror    = "2"
 rust_decimal = { version = "1", features = ["maths"] }
 logos        = "0.16"
-insta        = { version = "1", features = ["ron"] }
 chrono       = { version = "0.4", default-features = false, features = ["std", "clock"] }
 serde        = { version = "1", features = ["derive"] }
 iced         = { version = "0.14", features = ["advanced"] }
