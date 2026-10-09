@@ -1,0 +1,10 @@
+modbus::swap::byte(0x12, 0x34)
+modbus::swap::word(0x1234)
+modbus::uint32(0x0001, 0x0000, CDAB)
+modbus::uint32(0xFFFF, 0xFFFF)
+now + 99999999 years
+phi
+pi
+popcount(0)
+popcount(0xFF)
+price = 42; price * 3

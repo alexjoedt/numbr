@@ -150,7 +150,8 @@ type TokenList<'src> = Vec<(Token<'src>, std::ops::Range<usize>)>;
 ///
 /// # Errors
 ///
-/// [`EvalError::ParseError`] for an unexpected character, token or end of input.
+/// [`EvalError::ParseError`] for an unexpected character, token or end of input, and for
+/// more than 64 nesting levels or 256 operators.
 pub fn parse_with(input: &str, separator: DecimalSeparator) -> Result<Expr, EvalError> {
     let mut tokens = Vec::new();
     for (tok, span) in Token::lexer(input).spanned() {
@@ -171,6 +172,8 @@ pub fn parse_with(input: &str, separator: DecimalSeparator) -> Result<Expr, Eval
         tokens: &tokens,
         pos: 0,
         src: input,
+        depth: 0,
+        operators: 0,
     };
 
     let expr = p.parse_sequence()?;
@@ -210,10 +213,17 @@ fn split_comma_float<'src>(
     }
 }
 
+/// Limits that keep the recursive parser, interpreter and `Drop` off the stack limit:
+/// nested groups, calls, unary operators and `**`, and operators per expression.
+const MAX_DEPTH: usize = 64;
+const MAX_OPERATORS: usize = 256;
+
 struct Parser<'a, 'src> {
     tokens: &'a TokenList<'src>,
     pos: usize,
     src: &'src str,
+    depth: usize,
+    operators: usize,
 }
 
 impl<'a, 'src> Parser<'a, 'src> {
@@ -229,6 +239,34 @@ impl<'a, 'src> Parser<'a, 'src> {
         let tok = self.tokens.get(self.pos).map(|(t, _)| t);
         self.pos += 1;
         tok
+    }
+
+    fn descend<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T, EvalError>,
+    ) -> Result<T, EvalError> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(self.limit_error("expression is nested too deeply"));
+        }
+        let result = parse(self);
+        self.depth -= 1;
+        result
+    }
+
+    fn count_operator(&mut self) -> Result<(), EvalError> {
+        self.operators += 1;
+        if self.operators > MAX_OPERATORS {
+            return Err(self.limit_error("expression has too many operators"));
+        }
+        Ok(())
+    }
+
+    fn limit_error(&self, message: &str) -> EvalError {
+        EvalError::ParseError {
+            pos: self.current_pos(),
+            message: message.into(),
+        }
     }
 
     fn current_pos(&self) -> usize {
@@ -303,6 +341,9 @@ impl<'a, 'src> Parser<'a, 'src> {
         let mut lhs = self.parse_percent_of()?;
 
         loop {
+            if matches!(self.peek(), Some(Token::In | Token::As)) {
+                self.count_operator()?;
+            }
             if self.peek() == Some(&Token::In) {
                 self.advance();
                 let target = self.expect_ident()?;
@@ -336,6 +377,7 @@ impl<'a, 'src> Parser<'a, 'src> {
         // If lhs is a Percent(...) and next is `of`, consume it
         if matches!(&lhs, Expr::Percent(_)) && self.peek() == Some(&Token::Of) {
             self.advance(); // consume `of`
+            self.count_operator()?;
             let rhs = self.parse_additive()?;
             return Ok(Expr::PercentOf {
                 percent: Box::new(lhs),
@@ -356,6 +398,7 @@ impl<'a, 'src> Parser<'a, 'src> {
                 _ => break,
             };
             self.advance();
+            self.count_operator()?;
             let rhs = self.parse_multiplicative()?;
             lhs = Expr::BinaryOp {
                 op,
@@ -383,6 +426,7 @@ impl<'a, 'src> Parser<'a, 'src> {
                 _ => break,
             };
             self.advance();
+            self.count_operator()?;
             let rhs = self.parse_power()?;
             lhs = Expr::BinaryOp {
                 op,
@@ -399,7 +443,8 @@ impl<'a, 'src> Parser<'a, 'src> {
         let base = self.parse_unary()?;
         if self.peek() == Some(&Token::Power) {
             self.advance();
-            let exp = self.parse_power()?; // right-assoc
+            self.count_operator()?;
+            let exp = self.descend(Self::parse_power)?; // right-assoc
             return Ok(Expr::BinaryOp {
                 op: BinOp::Pow,
                 left: Box::new(base),
@@ -414,7 +459,8 @@ impl<'a, 'src> Parser<'a, 'src> {
     fn parse_unary(&mut self) -> Result<Expr, EvalError> {
         if self.peek() == Some(&Token::Minus) {
             self.advance();
-            let operand = self.parse_unary()?;
+            self.count_operator()?;
+            let operand = self.descend(Self::parse_unary)?;
             return Ok(Expr::UnaryOp {
                 op: UnOp::Neg,
                 operand: Box::new(operand),
@@ -422,7 +468,8 @@ impl<'a, 'src> Parser<'a, 'src> {
         }
         if self.peek() == Some(&Token::Tilde) {
             self.advance();
-            let operand = self.parse_unary()?;
+            self.count_operator()?;
+            let operand = self.descend(Self::parse_unary)?;
             return Ok(Expr::UnaryOp {
                 op: UnOp::BitNot,
                 operand: Box::new(operand),
@@ -500,13 +547,16 @@ impl<'a, 'src> Parser<'a, 'src> {
                 // Is this a function call?
                 if self.peek() == Some(&Token::LParen) {
                     self.advance(); // consume `(`
-                    let mut args = Vec::new();
-                    if self.peek() != Some(&Token::RParen) {
-                        args.push(self.parse_sequence()?);
-                        while self.eat(&Token::Comma) {
-                            args.push(self.parse_sequence()?);
+                    let args = self.descend(|p| {
+                        let mut args = Vec::new();
+                        if p.peek() != Some(&Token::RParen) {
+                            args.push(p.parse_sequence()?);
+                            while p.eat(&Token::Comma) {
+                                args.push(p.parse_sequence()?);
+                            }
                         }
-                    }
+                        Ok(args)
+                    })?;
                     if !self.eat(&Token::RParen) {
                         return Err(EvalError::ParseError {
                             pos: self.current_pos(),
@@ -524,7 +574,7 @@ impl<'a, 'src> Parser<'a, 'src> {
 
             Some(Token::LParen) => {
                 self.advance();
-                let inner = self.parse_sequence()?;
+                let inner = self.descend(Self::parse_sequence)?;
                 if !self.eat(&Token::RParen) {
                     return Err(EvalError::ParseError {
                         pos: self.current_pos(),

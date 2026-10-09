@@ -1,0 +1,10 @@
+modbus::float32(0x0000, 0x4128, CDAB)
+modbus::float32(0x4128, 0x0000)
+modbus_float32(0x4128, 0x0000)
+modbus::float32(0x4128, 0x0000, ABCD)
+modbus::float32le(0x0000, 0x4128)
+modbus::int32(0, 1)
+modbus::int32(0,1)
+modbus::int32(0, 1) + 0,5
+modbus::int32(0x0000, 0x0001)
+modbus::int32(0xFFFF, 0xFFFF)

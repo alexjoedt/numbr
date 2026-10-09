@@ -1,0 +1,1 @@
+modbus::float32le(0x0000, 0x4128)

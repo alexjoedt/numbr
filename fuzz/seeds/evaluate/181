@@ -1,0 +1,1 @@
+modbus::swap::byte(0x12, 0x34)

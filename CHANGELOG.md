@@ -12,6 +12,17 @@ section and the compare links at the bottom are updated.
 
 ## [Unreleased]
 
+### Fixed
+
+- Huge numbers no longer crash the app. A unit amount or percentage beyond about 7.9e28,
+  a unit or percentage result out of range and an overflowing `result:` aggregate show
+  an error. `-`, `/ -1`, `mod -1` and `abs` on the smallest integer wrap like `+` and `*`.
+  Such a huge integer mixed with a percentage or decimal result is an error instead of a
+  float, and in a `result:` block it is an error instead of being skipped. `result: avg`
+  of values near the limit no longer fails when their sum would overflow.
+- Deeply nested or very long expressions no longer crash the app. More than 64 nesting
+  levels or 256 operators on one line is a parse error.
+
 ## [0.1.2] - 2026-09-22
 
 ### Added

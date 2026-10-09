@@ -5,6 +5,7 @@ members = [
     "crates/app",
     "crates/providers",
 ]
+exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.package]

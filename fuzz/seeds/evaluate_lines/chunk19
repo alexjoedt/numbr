@@ -1,0 +1,10 @@
+round(2.5)
+sin(0)
+sqrt 16
+sqrt(16; 25)
+sqrt(2) * 3
+sqrt(4)
+sqrt(modbus::float32(0x42C8, 0x0000))
+# this is a comment
+today + 2 weeks
+today + 99999999999999 years
