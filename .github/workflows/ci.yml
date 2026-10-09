@@ -32,7 +32,7 @@ jobs:
         uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
         with:
           toolchain: ${{ matrix.rust }}
-          components: rustfmt, clippy
+          components: ${{ matrix.rust == 'stable' && 'rustfmt, clippy, llvm-tools-preview' || '' }}
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -50,9 +50,27 @@ jobs:
         if: matrix.rust == 'stable'
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
 
-      - name: Run tests
+      - name: Install cargo-llvm-cov
         if: matrix.rust == 'stable'
-        run: cargo test --workspace
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-llvm-cov@0.9.0
+
+      # Coverage ratchet: raise COVERAGE_FLOOR by hand when coverage improves,
+      # never lower it. view.rs is iced widget construction, left out.
+      - name: Run tests with coverage
+        if: matrix.rust == 'stable'
+        env:
+          COVERAGE_FLOOR: "76.5"
+        run: >-
+          cargo llvm-cov --workspace --summary-only
+          --ignore-filename-regex 'crates/ui/src/view\.rs'
+          --fail-under-lines "$COVERAGE_FLOOR"
+
+      # cargo llvm-cov skips doctests on stable.
+      - name: Run doctests
+        if: matrix.rust == 'stable'
+        run: cargo test --workspace --doc
 
       - name: Check (MSRV)
         if: matrix.rust != 'stable'
