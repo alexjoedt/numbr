@@ -27,6 +27,7 @@ Run them locally first.
   `crates/core/src/lib.rs`.
 - `cargo fmt` applied and `cargo clippy` clean.
 - One logical change per PR.
+- A line under `[Unreleased]` in `CHANGELOG.md` for any user-visible change.
 
 ## Licensing
 
