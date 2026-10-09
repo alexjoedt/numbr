@@ -76,13 +76,61 @@ jobs:
         if: matrix.rust != 'stable'
         run: cargo check --workspace
 
-  release:
-    name: Release
-    needs: test
+  preflight:
+    name: Release preflight
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check tag matches workspace version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION="$(awk -F'"' '/^\[/ { s = ($0 == "[workspace.package]") } s && /^version/ { print $2; exit }' Cargo.toml)"
+          [ "$VERSION" = "$CARGO_VERSION" ] || { echo "::error::Tag $GITHUB_REF_NAME does not match workspace version $CARGO_VERSION"; exit 1; }
+
+      # Pre-releases fall back to [Unreleased] and may have empty notes.
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          extract() {
+            awk -v h="## [$1]" '
+              index($0, h) == 1 { p=1; next }
+              p && (/^## \[/ || /^\[[^]]*\]: /) { exit }
+              p { print }
+            ' CHANGELOG.md
+          }
+          extract "$VERSION" > RELEASE_NOTES.md
+          if ! grep -q '[^[:space:]]' RELEASE_NOTES.md; then
+            case "$VERSION" in
+              *-*) extract Unreleased > RELEASE_NOTES.md
+                   grep -q '[^[:space:]]' RELEASE_NOTES.md || echo "Pre-release $GITHUB_REF_NAME." > RELEASE_NOTES.md ;;
+              *) echo "::error::No CHANGELOG.md entry for $VERSION"; exit 1 ;;
+            esac
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          if-no-files-found: error
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: [test, preflight]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -91,22 +139,62 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwayland-dev libxkbcommon-dev libegl-dev
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: stable
+
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          key: release
+          key: release-${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release -p numbr
+        run: cargo build --release --locked -p numbr
 
       - name: Create release archive
-        run: |
-          TAG=${GITHUB_REF_NAME}
-          ARCHIVE="numbr-${TAG}-x86_64-unknown-linux-gnu.tar.gz"
-          tar -czf "$ARCHIVE" -C target/release numbr
-          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+        run: >-
+          tar -czf "numbr-${GITHUB_REF_NAME}-${{ matrix.target }}.tar.gz"
+          -C target/release numbr
+          -C "$GITHUB_WORKSPACE" README.md LICENSE-MIT LICENSE-APACHE
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.target }}
+          path: numbr-*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum numbr-*.tar.gz > SHA256SUMS
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/numbr-*.tar.gz
+            dist/SHA256SUMS
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          files: ${{ env.ARCHIVE }}
-          generate_release_notes: true
+          files: |
+            dist/numbr-*.tar.gz
+            dist/SHA256SUMS
+          body_path: dist/RELEASE_NOTES.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
