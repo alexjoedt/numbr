@@ -12,6 +12,15 @@ section and the compare links at the bottom are updated.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-09
+
+### Changed
+
+- `numbr-core` exposes only the engine, value and provider types. The lexer, parser,
+  interpreter, builtin, modbus and unit modules are now crate-private.
+- The 0.1.2 release binaries report version 0.1.1, because the workspace version was
+  not bumped before tagging. 0.2.0 is the first release whose version matches its tag.
+
 ### Fixed
 
 - Huge numbers no longer crash the app. A unit amount or percentage beyond about 7.9e28,
@@ -81,7 +90,8 @@ section and the compare links at the bottom are updated.
 - Font size, family and weight settings, stored in `settings.toml`.
 - Hyprland integration instructions in the README.
 
-[Unreleased]: https://github.com/alexjoedt/numbr/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/alexjoedt/numbr/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/alexjoedt/numbr/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/alexjoedt/numbr/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/alexjoedt/numbr/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/alexjoedt/numbr/releases/tag/v0.1.0
