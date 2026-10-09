@@ -5,10 +5,14 @@ use logos::Logos as _;
 
 // ── AST ──────────────────────────────────────────────────────────────────────
 
+/// Expression tree produced by [`parse`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
+    /// Integer literal (decimal, hex, binary or octal).
     Integer(i128),
+    /// Floating-point literal.
     Float(f64),
+    /// String literal.
     Str(String),
     /// A calendar date literal (`2026-07-04`)
     Date(chrono::NaiveDate),
@@ -18,38 +22,53 @@ pub enum Expr {
 
     /// `name = expr`
     Assign {
+        /// Variable name.
         name: String,
+        /// Assigned expression.
         value: Box<Expr>,
     },
 
     /// `expr ; expr` — semicolon-separated sequence, last value is the result
     Sequence(Vec<Expr>),
 
+    /// `left op right`
     BinaryOp {
+        /// Operator.
         op: BinOp,
+        /// Left operand.
         left: Box<Expr>,
+        /// Right operand.
         right: Box<Expr>,
     },
+    /// `op operand`
     UnaryOp {
+        /// Operator.
         op: UnOp,
+        /// Operand.
         operand: Box<Expr>,
     },
 
     /// `func(args…)` — name is the canonical (underscore) form
     Call {
+        /// Function name, `modbus::float32` stored as `modbus_float32`.
         name: String,
+        /// Argument expressions.
         args: Vec<Expr>,
     },
 
     /// `expr as int8` / `expr as uint32`
     BitCast {
+        /// Expression to cast.
         value: Box<Expr>,
+        /// Target width and signedness.
         cast: BitCast,
     },
 
     /// `expr in unit_or_base`  e.g. `10 km in miles`, `0xFF in binary`
     Convert {
+        /// Expression to convert.
         value: Box<Expr>,
+        /// Unit or number base name, e.g. `miles`, `hex`.
         target: String,
     },
 
@@ -58,41 +77,55 @@ pub enum Expr {
 
     /// `percent_expr of value_expr`
     PercentOf {
+        /// The percentage.
         percent: Box<Expr>,
+        /// The base value.
         value: Box<Expr>,
     },
 
     /// `<expr> <unit>` — a value annotated with a physical unit, e.g. `10 km`, `2 weeks`
     UnitValue {
+        /// Magnitude.
         amount: Box<Expr>,
+        /// Unit name as written.
         unit: String,
     },
 }
 
+/// Binary operator.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinOp {
     Add,
     Sub,
     Mul,
     Div,
+    /// `mod`
     Rem,
+    /// `**`
     Pow,
     BitAnd,
     BitOr,
+    /// `^`, bitwise XOR, not power.
     BitXor,
     Shl,
     Shr,
 }
 
+/// Prefix operator: `-` or `~`.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnOp {
     Neg,
     BitNot,
 }
 
+/// Target of an `as` cast, e.g. `int16` or `uint32`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BitCast {
+    /// `int` (two's complement) rather than `uint`.
     pub signed: bool,
+    /// Width in bits: 8, 16, 32 or 64.
     pub bits: u8,
 }
 
@@ -111,10 +144,20 @@ pub enum DecimalSeparator {
 
 type TokenList<'src> = Vec<(Token<'src>, std::ops::Range<usize>)>;
 
+/// Parse `input` with `.` as the decimal separator.
+///
+/// # Errors
+///
+/// [`EvalError::ParseError`] for an unexpected character, token or end of input.
 pub fn parse(input: &str) -> Result<Expr, EvalError> {
     parse_with(input, DecimalSeparator::Point)
 }
 
+/// Parse `input` with the given decimal separator.
+///
+/// # Errors
+///
+/// [`EvalError::ParseError`] for an unexpected character, token or end of input.
 pub fn parse_with(input: &str, separator: DecimalSeparator) -> Result<Expr, EvalError> {
     let mut tokens = Vec::new();
     for (tok, span) in Token::lexer(input).spanned() {

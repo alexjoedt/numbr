@@ -10,6 +10,12 @@ use rust_decimal::Decimal;
 /// - `Value::Integer(n)` → label with target (treating n as days for duration targets)
 /// - `Value::Decimal(d)` → label with target (treating d as days for duration targets)
 /// - `Value::Float(f)` → label with target (treating f as days for duration targets)
+///
+/// # Errors
+///
+/// [`EvalError::UnknownUnit`] for an unknown source or target unit,
+/// [`EvalError::TypeError`] for incompatible units, a non-numeric value or a non-finite
+/// result.
 pub fn convert_value(v: Value, target: &str) -> Result<Value, EvalError> {
     match v {
         Value::Unit { amount, ref unit } => {
@@ -60,6 +66,11 @@ pub fn convert_value(v: Value, target: &str) -> Result<Value, EvalError> {
 }
 
 /// Core f64 conversion between two unit strings.
+///
+/// # Errors
+///
+/// [`EvalError::UnknownUnit`] for an unknown unit, [`EvalError::TypeError`] when `from`
+/// and `to` measure different quantities.
 pub fn convert_f64(amount: f64, from: &str, to: &str) -> Result<f64, EvalError> {
     // Temperature — non-linear, handle separately
     if is_temperature_unit(from) && is_temperature_unit(to) {
@@ -233,6 +244,10 @@ pub fn time_unit_to_milliseconds(unit: &str) -> Option<i64> {
 }
 
 /// Convert an f64 result to a `Decimal` rounded to 10 decimal places.
+///
+/// # Errors
+///
+/// [`EvalError::TypeError`] when `v` is NaN, infinite or outside the `Decimal` range.
 pub fn f64_to_decimal(v: f64) -> Result<Decimal, EvalError> {
     Decimal::from_f64(v)
         .map(|d| d.round_dp(10))

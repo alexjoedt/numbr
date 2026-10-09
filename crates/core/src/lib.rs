@@ -1,15 +1,46 @@
+//! Evaluation engine of numbr, a natural-language calculator.
+//!
+//! This crate turns one line of calculator input into a [`Value`]. It has no GUI
+//! dependencies; `numbr-ui` drives it line by line and `numbr-app` wires the two together.
+//!
+//! [`Engine`] is the entry point. [`Engine::evaluate`] returns a `Result<Value, EvalError>`,
+//! [`Engine::evaluate_line`] records the result for `lineN` references and turns errors into
+//! displayable values. Variables and line results live in a [`Scope`], which can be
+//! snapshotted and restored for incremental evaluation. The expression language is
+//! described in `docs/grammar.md`.
+//!
+//! ```
+//! use numbr_core::{Engine, Value};
+//!
+//! let mut engine = Engine::new();
+//! assert_eq!(engine.evaluate("2 + 3").unwrap(), Value::Integer(5));
+//! assert_eq!(engine.evaluate("price = 42; price * 3").unwrap(), Value::Integer(126));
+//! assert_eq!(engine.evaluate("0xFF in binary").unwrap().to_string(), "0b11111111");
+//! assert_eq!(engine.evaluate("255 as int8").unwrap(), Value::Integer(-1));
+//! ```
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
+/// Built-in math, bit and date functions (`sqrt`, `popcount`, `diff`, ...).
 pub mod builtin;
+/// The [`Engine`] entry point and comment stripping.
 pub mod engine;
+/// Error types returned by evaluation and function calls.
 pub mod error;
+/// The [`functions::FunctionProvider`] trait for pluggable function sets.
 pub mod functions;
+/// Tree-walking interpreter that evaluates a parsed [`parser::Expr`].
 pub mod interpreter;
+/// Tokens produced by the `logos` lexer.
 pub mod lexer;
 pub mod modbus;
+/// Pratt parser and the expression AST.
 pub mod parser;
+/// Variables and per-line results of one evaluation session.
 pub mod scope;
+/// Unit tables and conversions (length, mass, temperature, time, ...).
 pub mod units;
+/// The [`Value`] type returned by evaluation.
 pub mod value;
 
 pub use engine::{strip_comment, Engine};

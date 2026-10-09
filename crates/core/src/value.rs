@@ -14,7 +14,12 @@ pub enum Value {
     /// Text
     Str(String),
     /// A value tagged with a physical unit (e.g. "10 km", "30 celsius")
-    Unit { amount: Decimal, unit: String },
+    Unit {
+        /// Magnitude in `unit`.
+        amount: Decimal,
+        /// Unit name as written, e.g. `km`, `miles`, `celsius`.
+        unit: String,
+    },
     /// A calendar date (e.g. `today`, `2026-07-04`)
     Date(NaiveDate),
     /// A wall-clock datetime (e.g. `now`)
