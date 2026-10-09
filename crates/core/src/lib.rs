@@ -21,30 +21,27 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-/// Built-in math, bit and date functions (`sqrt`, `popcount`, `diff`, ...).
-pub mod builtin;
+pub(crate) mod builtin;
 /// The [`Engine`] entry point and comment stripping.
 pub mod engine;
 /// Error types returned by evaluation and function calls.
 pub mod error;
 /// The [`functions::FunctionProvider`] trait for pluggable function sets.
 pub mod functions;
-/// Tree-walking interpreter that evaluates a parsed [`parser::Expr`].
-pub mod interpreter;
-/// Tokens produced by the `logos` lexer.
-pub mod lexer;
-pub mod modbus;
-/// Pratt parser and the expression AST.
-pub mod parser;
+pub(crate) mod interpreter;
+pub(crate) mod lexer;
+pub(crate) mod modbus;
+pub(crate) mod parser;
 /// Variables and per-line results of one evaluation session.
 pub mod scope;
-/// Unit tables and conversions (length, mass, temperature, time, ...).
-pub mod units;
+pub(crate) mod units;
 /// The [`Value`] type returned by evaluation.
 pub mod value;
 
+pub use builtin::BuiltinFunctions;
 pub use engine::{strip_comment, Engine};
 pub use error::{EvalError, FuncError};
+pub use modbus::ModbusFunctions;
 pub use parser::DecimalSeparator;
 pub use scope::Scope;
 pub use value::Value;

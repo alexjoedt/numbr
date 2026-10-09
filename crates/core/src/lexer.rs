@@ -1,3 +1,5 @@
+//! Tokens produced by the `logos` lexer.
+
 use logos::Logos;
 
 /// A lexical token; string slices borrow from the input.

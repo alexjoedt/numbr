@@ -72,17 +72,25 @@ impl Engine {
     /// # Errors
     ///
     /// [`EvalError::ParseError`] for invalid syntax, [`EvalError::Incomplete`] for an
-    /// unknown `result:` aggregate, and any error of [`Interpreter::eval`]:
+    /// unknown `result:` aggregate, and the evaluation errors
     /// [`EvalError::DivisionByZero`], [`EvalError::UnknownVariable`],
     /// [`EvalError::TypeError`], [`EvalError::UnknownUnit`], [`EvalError::FuncError`].
     ///
     /// # Panics
     ///
-    /// On arithmetic overflow outside `**`: an integer beyond the `Decimal` range used
-    /// as a unit amount or percentage (`100000000000000000000000000000 km`), a `Decimal`
-    /// result beyond its range (`10 km / 0.0000000000000000000000000001`), and prefix
-    /// `-`, `/ -1` or `mod -1` on `i128::MIN`. Integer `+`, `-` and `*` wrap instead.
-    /// Full list in [`Interpreter::eval`].
+    /// Overflow outside the `**` path is not turned into an error:
+    ///
+    /// - An integer beyond the `Decimal` range (about 7.9e28) panics when it is promoted
+    ///   to `Decimal`: as a unit amount, a percentage or next to a `Decimal` operand,
+    ///   e.g. `100000000000000000000000000000 km` or `100000000000000000000000000000%`.
+    /// - `Decimal` arithmetic is unchecked, so a result beyond its range panics, e.g.
+    ///   `79228162514264337593543950335 km * 10` or `10 km / 0.0000000000000000000000000001`.
+    /// - Prefix `-`, `/ -1` and `mod -1` on `i128::MIN` panic (prefix `-` wraps in
+    ///   release builds).
+    ///
+    /// Integer `+`, `-` and `*` never panic: they wrap silently on `i128` overflow, so
+    /// `170141183460469231731687303715884105727 + 1` gives `i128::MIN`. Only `**`
+    /// checks and returns [`EvalError::TypeError`] on overflow.
     ///
     /// # Examples
     ///
@@ -139,11 +147,7 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// On arithmetic overflow outside `**`: an integer beyond the `Decimal` range used
-    /// as a unit amount or percentage (`100000000000000000000000000000 km`), a `Decimal`
-    /// result beyond its range (`10 km / 0.0000000000000000000000000001`), and prefix
-    /// `-`, `/ -1` or `mod -1` on `i128::MIN`. Integer `+`, `-` and `*` wrap instead.
-    /// Full list in [`Interpreter::eval`].
+    /// On arithmetic overflow outside `**`, see [`Engine::evaluate`].
     ///
     /// # Examples
     ///
@@ -155,7 +159,7 @@ impl Engine {
     /// assert_eq!(engine.evaluate_line("line1 * 2"), Value::Integer(20));
     /// assert_eq!(engine.evaluate_line("2 +"), Value::Str(String::new()));
     /// assert_eq!(engine.evaluate_line("1 / 0"), Value::Err("Division by zero".into()));
-    /// assert_eq!(engine.scope().line_count(), 4);
+    /// assert_eq!(engine.scope().lines().len(), 4);
     /// ```
     pub fn evaluate_line(&mut self, input: &str) -> Value {
         let result = match self.evaluate(input) {

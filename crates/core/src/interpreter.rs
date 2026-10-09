@@ -1,3 +1,5 @@
+//! Tree-walking interpreter that evaluates a parsed [`Expr`].
+
 use chrono::Duration;
 use rust_decimal::Decimal;
 
@@ -11,7 +13,7 @@ use crate::value::Value;
 /// Evaluates a parsed [`Expr`] against a [`Scope`] and a set of function providers.
 pub struct Interpreter {
     /// Variables and line results visible to evaluated expressions.
-    pub scope: Scope,
+    pub(crate) scope: Scope,
     providers: Vec<Box<dyn FunctionProvider>>,
 }
 
@@ -39,19 +41,7 @@ impl Interpreter {
     ///
     /// # Panics
     ///
-    /// Overflow outside the `**` path is not turned into an error:
-    ///
-    /// - An integer beyond the `Decimal` range (about 7.9e28) panics when it is promoted
-    ///   to `Decimal`: as a unit amount, a percentage or next to a `Decimal` operand,
-    ///   e.g. `100000000000000000000000000000 km` or `100000000000000000000000000000%`.
-    /// - `Decimal` arithmetic is unchecked, so a result beyond its range panics, e.g.
-    ///   `79228162514264337593543950335 km * 10` or `10 km / 0.0000000000000000000000000001`.
-    /// - Prefix `-`, `/ -1` and `mod -1` on `i128::MIN` panic (prefix `-` wraps in
-    ///   release builds).
-    ///
-    /// Integer `+`, `-` and `*` never panic: they wrap silently on `i128` overflow, so
-    /// `170141183460469231731687303715884105727 + 1` gives `i128::MIN`. Only `**`
-    /// checks and returns [`EvalError::TypeError`] on overflow.
+    /// On arithmetic overflow outside `**`, see [`crate::Engine::evaluate`].
     pub fn eval(&mut self, expr: &Expr) -> Result<Value, EvalError> {
         match expr {
             Expr::Integer(n) => Ok(Value::Integer(*n)),

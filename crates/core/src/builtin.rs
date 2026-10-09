@@ -1,3 +1,5 @@
+//! Built-in math, bit and date functions (`sqrt`, `popcount`, `diff`, ...).
+
 use crate::error::FuncError;
 use crate::functions::FunctionProvider;
 use crate::value::Value;

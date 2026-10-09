@@ -41,11 +41,6 @@ impl Scope {
         self.lines.get(n.saturating_sub(1))
     }
 
-    /// Number of recorded line results.
-    pub fn line_count(&self) -> usize {
-        self.lines.len()
-    }
-
     /// Look up `name`: first check line refs, then variables.
     pub fn resolve(&self, name: &str) -> Option<Value> {
         // line1 .. lineN
